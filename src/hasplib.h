@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2022 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2023 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #ifdef ARDUINO
@@ -14,6 +14,8 @@
 #include <cctype>
 #include <string>
 #include <stdint.h>
+
+#include "ArduinoJson.h"
 
 #include "hasp_conf.h"
 #include "hasp_mem.h"
@@ -38,10 +40,12 @@
 #include "hasp/hasp_nvs.h"
 #endif
 
-#include "ArduinoJson.h"
-
 #if HASP_USE_FREETYPE > 0
 #include "lv_freetype.h"
+#endif
+
+#if HASP_USE_CONFIG > 0
+#include "hasp_config.h"
 #endif
 
 #if HASP_USE_PNGDECODE > 0

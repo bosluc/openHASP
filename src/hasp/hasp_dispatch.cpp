@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2022 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2023 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #include <time.h>
@@ -35,10 +35,6 @@
 #include "sys/net/hasp_network.h" // for network_get_status()
 #include "sys/net/hasp_time.h"
 #endif
-#endif
-
-#if HASP_USE_CONFIG > 0
-#include "hasp_config.h"
 #endif
 
 dispatch_conf_t dispatch_setings = {.teleperiod = 300};
@@ -441,8 +437,8 @@ void dispatch_topic_payload(const char* topic, const char* payload, bool update,
 // Get or Set a part of the config.json file
 void dispatch_config(const char* topic, const char* payload, uint8_t source)
 {
-    StaticJsonDocument<384> doc;
-    char buffer[384];
+    DynamicJsonDocument doc(512);
+    char buffer[512];
     JsonObject settings;
     bool update;
 
@@ -506,7 +502,7 @@ void dispatch_config(const char* topic, const char* payload, uint8_t source)
             timeGetConfig(settings);
     }
 #if HASP_USE_MQTT > 0
-    else if(strcasecmp_P(topic, PSTR("mqtt")) == 0) {
+    else if(strcasecmp_P(topic, PSTR(FP_MQTT)) == 0) {
         if(update)
             mqttSetConfig(settings);
         else
@@ -526,15 +522,23 @@ void dispatch_config(const char* topic, const char* payload, uint8_t source)
     }
 #endif
 #if HASP_USE_HTTP > 0 || HASP_USE_HTTP_ASYNC > 0
-    else if(strcasecmp_P(topic, PSTR("http")) == 0) {
+    else if(strcasecmp_P(topic, PSTR(FP_HTTP)) == 0) {
         if(update)
             httpSetConfig(settings);
         else
             httpGetConfig(settings);
     }
 #endif
+#if HASP_USE_FTP > 0
+    else if(strcasecmp_P(topic, PSTR(FP_FTP)) == 0) {
+        if(update)
+            ftpSetConfig(settings);
+        else
+            ftpGetConfig(settings);
+    }
+#endif
 #if HASP_USE_ARDUINOOTA > 0 || HASP_USE_HTTP_UPDATE > 0
-    else if(strcasecmp_P(topic, PSTR("ota")) == 0) {
+    else if(strcasecmp_P(topic, PSTR(FP_OTA)) == 0) {
         if(update)
             otaSetConfig(settings);
         else
@@ -546,7 +550,7 @@ void dispatch_config(const char* topic, const char* payload, uint8_t source)
     // Send output
     if(!update) {
         char subtopic[8];
-        settings.remove(F("pass")); // hide password in output
+        settings.remove(FP_CONFIG_PASS); // hide password in output
 
         /* size_t size = */ serializeJson(doc, buffer, sizeof(buffer));
         memcpy_P(subtopic, PSTR("config"), 7);
@@ -624,14 +628,14 @@ void dispatch_text_line(const char* payload, uint8_t source)
 {
 
     {
-        // size_t maxsize = (128u * ((strlen(payload) / 128) + 1)) + 512;
-        // DynamicJsonDocument json(maxsize);
-        StaticJsonDocument<1024> doc;
+        // StaticJsonDocument<1024> doc;
+        size_t maxsize = (128u * ((strlen(payload) / 128) + 1)) + 512;
+        DynamicJsonDocument doc(maxsize);
 
         // Note: Deserialization needs to be (const char *) so the objects WILL be copied
         // this uses more memory but otherwise the mqtt receive buffer can get overwritten by the send buffer !!
         DeserializationError jsonError = deserializeJson(doc, payload);
-        // json.shrinkToFit();
+        doc.shrinkToFit();
 
         if(jsonError) {
             // dispatch_json_error(TAG_MSGR, jsonError);
@@ -654,8 +658,11 @@ void dispatch_text_line(const char* payload, uint8_t source)
 
 void dispatch_parse_json(const char*, const char* payload, uint8_t source)
 { // Parse an incoming JSON array into individual commands
-    StaticJsonDocument<2048> doc;
+  // StaticJsonDocument<2048> doc;
+    size_t maxsize = (128u * ((strlen(payload) / 128) + 1)) + 512;
+    DynamicJsonDocument doc(maxsize);
     DeserializationError jsonError = deserializeJson(doc, payload);
+    doc.shrinkToFit();
 
     if(jsonError) {
         dispatch_json_error(TAG_MSGR, jsonError);
@@ -675,22 +682,30 @@ void dispatch_parse_jsonl(Stream& stream, uint8_t& saved_page_id)
 void dispatch_parse_jsonl(std::istream& stream, uint8_t& saved_page_id)
 #endif
 {
-    // uint8_t savedPage = haspPages.get();
-    uint16_t line = 1;
-    StaticJsonDocument<1024> jsonl;
-    DeserializationError jsonError = deserializeJson(jsonl, stream);
-
 #ifdef ARDUINO
     stream.setTimeout(25);
 #endif
 
-    // guiStop();
-    while(jsonError == DeserializationError::Ok) {
-        hasp_new_object(jsonl.as<JsonObject>(), saved_page_id);
+    // StaticJsonDocument<1024> jsonl;
+    DynamicJsonDocument jsonl(MQTT_MAX_PACKET_SIZE / 2 + 128);
+    DeserializationError jsonError; // = deserializeJson(jsonl, stream);
+    uint16_t line = 1;
+
+    // while(jsonError == DeserializationError::Ok) {
+    //     hasp_new_object(jsonl.as<JsonObject>(), saved_page_id);
+    //     jsonError = deserializeJson(jsonl, stream);
+    //     line++;
+    // }
+
+    while(1) {
         jsonError = deserializeJson(jsonl, stream);
-        line++;
-    }
-    // guiStart();
+        if(jsonError == DeserializationError::Ok) {
+            hasp_new_object(jsonl.as<JsonObject>(), saved_page_id);
+            line++;
+        } else {
+            break;
+        }
+    };
 
     /* For debugging purposes */
     if(jsonError == DeserializationError::EmptyInput) {

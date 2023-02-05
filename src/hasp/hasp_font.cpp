@@ -1,3 +1,6 @@
+/* MIT License - Copyright (c) 2019-2023 Francis Van Roie
+   For full license information read the LICENSE file in the project folder */
+
 #include <string.h>
 
 #include "hasplib.h"
@@ -24,10 +27,13 @@ typedef struct
 #include "font/hasp_font_loader.h"
 
 #if defined(ARDUINO_ARCH_ESP32) && (HASP_USE_FREETYPE > 0) // && defined(ESP32S3)
+// #if ESP_FLASH_SIZE > 4
 extern const uint8_t OPENHASP_TTF_START[] asm("_binary_data_openhasp_ttf_start");
 extern const uint8_t OPENHASP_TTF_END[] asm("_binary_data_openhasp_ttf_end");
-// extern const uint8_t OPENHASPLITE_TTF_START[] asm("_binary_data_openhasplite_ttf_start");
-// extern const uint8_t OPENHASPLITE_TTF_END[] asm("_binary_data_openhasplite_ttf_end");
+// #else
+// extern const uint8_t OPENHASP_TTF_START[] asm("_binary_data_openhasplite_ttf_start");
+// extern const uint8_t OPENHASP_TTF_END[] asm("_binary_data_openhasplite_ttf_end");
+// #endif
 #endif
 
 static lv_ll_t hasp_fonts_ll;
@@ -51,8 +57,6 @@ const uint8_t* font_dummy_glyph_bitmap(const struct _lv_font_struct*, uint32_t)
 
 void font_setup()
 {
-    _lv_ll_init(&hasp_fonts_ll, sizeof(hasp_font_info_t));
-
 #if(HASP_USE_FREETYPE > 0) // initialize the FreeType renderer
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -71,6 +75,8 @@ void font_setup()
 #else
     LOG_VERBOSE(TAG_FONT, F("FreeType " D_SERVICE_DISABLED));
 #endif // HASP_USE_FREETYPE
+
+    _lv_ll_init(&hasp_fonts_ll, sizeof(hasp_font_info_t));
 }
 
 size_t font_split_payload(const char* payload)

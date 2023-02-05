@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2022 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2023 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #include "hasplib.h"
@@ -27,16 +27,15 @@
 
 #if HASP_USE_CONFIG > 0
 #include "lv_fs_if.h"
-#include "hasp_config.h"
 #include "font/hasp_font_loader.h"
-//#include "hasp_filesystem.h" included in hasp_conf.h
+// #include "hasp_filesystem.h" included in hasp_conf.h
 #endif
 
 #if HASP_USE_EEPROM > 0
 #include "EEPROM.h"
 #endif
 
-//#if LV_USE_HASP
+// #if LV_USE_HASP
 
 /*********************
  *      DEFINES
@@ -214,31 +213,50 @@ void hasp_antiburn_cb(lv_task_t* task)
 {
     lv_obj_t* layer = lv_disp_get_layer_sys(NULL);
     if(layer) {
-        // lv_color_t color[5] = {LV_COLOR_BLACK, LV_COLOR_WHITE, LV_COLOR_RED, LV_COLOR_LIME, LV_COLOR_BLUE};
-        // lv_obj_set_style_local_bg_color(layer, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, color[task->repeat_count % 5]);
-        lv_disp_t* disp         = lv_disp_get_default();
-        lv_disp_drv_t* disp_drv = &disp->driver;
-        lv_area_t area;
-
-        area.x1 = 0;
-        // area.x2 = disp_drv->hor_res - 1;
-        // lv_color_t color[disp_drv->hor_res];
-        area.x2 = lv_obj_get_width(layer) - 1;
-        lv_color_t color[area.x2];
-
-        for(lv_coord_t y = 0; y < lv_obj_get_height(layer); y++) {
-            for(lv_coord_t x = 0; x < area.x2; x++) {
-                color[x].full = HASP_RANDOM(UINT16_MAX);
-            }
-            area.y1 = y;
-            area.y2 = y;
-            haspTft.flush_pixels(disp_drv, &area, color);
+        // Fill a buffer with random colors
+        lv_color_t color[1223];
+        size_t len = sizeof(color) / sizeof(color[0]);
+        for(size_t x = 0; x < len; x++) {
+            color[x].full = HASP_RANDOM(UINT16_MAX);
         }
 
-        if(task->repeat_count != 1) return; // don't stop yet
+        // list of possible draw widths; prime numbers combat recurring patterns on the screen
+        uint8_t prime[] = {61,  67,  73,  79,  83,  89,  97,  103, 109, 113, 127, 131, 137, 139, 149,
+                           157, 163, 167, 173, 179, 181, 191, 197, 211, 223, 227, 229, 233, 251};
+
+        lv_disp_t* disp         = lv_disp_get_default();
+        lv_disp_drv_t* disp_drv = &disp->driver;
+
+        lv_coord_t scr_h = lv_obj_get_height(layer) - 1;
+        lv_coord_t scr_w = lv_obj_get_width(layer) - 1;
+        lv_coord_t w     = 487; // first prime larger than 480
+        lv_area_t area;
+
+        area.y1 = 0;
+        while(area.y1 <= scr_h) {
+            if(w > scr_w) w = scr_w; // limit to the actual screenwidth
+            if(w > len) w = len;     // don't overrun the buffer
+            lv_coord_t h    = len / w;
+            size_t headroom = len % w; // additional bytes in the buffer that can be used for a random offset
+
+            area.y2 = area.y1 + h - 1;
+            if(area.y2 > scr_h) area.y2 = scr_h;
+
+            area.x1 = 0;
+            while(area.x1 <= scr_w) {
+                area.x2 = area.x1 + w - 1;
+                if(area.x2 > scr_w) area.x2 = scr_w;
+
+                size_t offset = headroom ? HASP_RANDOM(headroom) : 0;
+                haspTft.flush_pixels(disp_drv, &area, color + offset);
+                area.x1 += w;
+            }
+
+            w = prime[HASP_RANDOM(sizeof(prime))]; // new random width
+            area.y1 += h;
+        }
     }
 
-    // lv_obj_invalidate(lv_scr_act());
     if(task->repeat_count != 1) return; // don't stop yet
 
     // task is about to get deleted
@@ -557,40 +575,14 @@ void haspSetup(void)
 
     /* ********** Font Initializations ********** */
 
-    LOG_WARNING(TAG_ATTR, "%s %d %x", __FILE__, __LINE__, nullptr);
-    LOG_WARNING(TAG_ATTR, "%s %d %x", __FILE__, __LINE__, haspFonts[0]);
+    // LOG_WARNING(TAG_ATTR, "%s %d %x", __FILE__, __LINE__, nullptr);
+    // LOG_WARNING(TAG_ATTR, "%s %d %x", __FILE__, __LINE__, haspFonts[0]);
     // LOG_WARNING(TAG_ATTR, "%s %d %x", __FILE__, __LINE__, &robotocondensed_regular_16);
 
-#if 0 && HASP_USE_FREETYPE > 0
-
-#if TFT_HEIGHT >= 480 && TFT_WIDTH >= 480
-    haspFonts[0] = get_font(" 24");
-    haspFonts[1] = get_font(" 32");
-    haspFonts[2] = get_font(" 48");
-    haspFonts[3] = get_font(" 64");
-#elif TFT_HEIGHT >= 320 && TFT_WIDTH >= 320
-    haspFonts[0] = get_font(" 16");
-    haspFonts[1] = get_font(" 24");
-    haspFonts[2] = get_font(" 32");
-    haspFonts[3] = get_font(" 48");
-#elif TFT_HEIGHT >= 272 && TFT_WIDTH >= 272
-    haspFonts[0] = get_font(" 14");
-    haspFonts[1] = get_font(" 18");
-    haspFonts[2] = get_font(" 28");
-    haspFonts[3] = get_font(" 36");
-#else // smaller than 272
-    haspFonts[0] = get_font(" 12");
-    haspFonts[1] = get_font(" 16");
-    haspFonts[2] = get_font(" 24");
-    haspFonts[3] = get_font(" 32");
-#endif
-
-#endif // HASP_USE_FREETYPE
-
-    if(haspFonts[0] == nullptr) haspFonts[0] = LV_THEME_DEFAULT_FONT_SMALL;
-    if(haspFonts[1] == nullptr) haspFonts[1] = LV_THEME_DEFAULT_FONT_NORMAL;
-    if(haspFonts[2] == nullptr) haspFonts[2] = LV_THEME_DEFAULT_FONT_SUBTITLE;
-    if(haspFonts[3] == nullptr) haspFonts[3] = LV_THEME_DEFAULT_FONT_TITLE;
+    haspFonts[0] = LV_THEME_DEFAULT_FONT_SMALL;
+    haspFonts[1] = LV_THEME_DEFAULT_FONT_NORMAL;
+    haspFonts[2] = LV_THEME_DEFAULT_FONT_SUBTITLE;
+    haspFonts[3] = LV_THEME_DEFAULT_FONT_TITLE;
 
     hasp_set_theme(haspThemeId);
 

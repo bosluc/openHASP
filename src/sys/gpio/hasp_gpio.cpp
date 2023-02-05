@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2022 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2023 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #include "lv_conf.h" // For timing defines
@@ -6,12 +6,11 @@
 #include "hasplib.h"
 
 #include "hasp_gpio.h"
-#include "hasp_config.h"
 
 // Device Drivers
 #include "dev/device.h"
 #include "drv/tft/tft_driver.h"
-//#include "drv/touch/touch_driver.h"
+// #include "drv/touch/touch_driver.h"
 
 #ifdef ARDUINO_ARCH_ESP8266
 #define INPUT_PULLDOWN INPUT
@@ -68,7 +67,7 @@ static inline void gpio_update_group(uint8_t group, lv_obj_t* obj, bool power, i
 //     uint32_t div_a;     /*!<Division factor. Range: 0 ~ 63. */
 // } adc_digi_clk_t;
 #include "driver/adc.h"
-//#include "driver/dac_common.h"
+// #include "driver/dac_common.h"
 #include "driver/ledc.h"
 #include "driver/uart.h"
 #include "esp32-hal-dac.h"
@@ -816,7 +815,7 @@ hasp_gpio_config_t gpioGetPinConfig(uint8_t num)
 
 void gpio_discovery(JsonObject& input, JsonArray& relay, JsonArray& light, JsonArray& dimmer)
 {
-    char description[20];
+    char description[20] = "";
 
     for(uint8_t i = 0; i < HASP_NUM_GPIO_CONFIG; i++) {
         switch(gpioConfig[i].type) {
@@ -837,6 +836,7 @@ void gpio_discovery(JsonObject& input, JsonArray& relay, JsonArray& light, JsonA
                 break;
 
             case SWITCH:
+            case BUTTON ... TOUCH:
                 strcpy_P(description, PSTR("none"));
                 break;
             case BATTERY:
@@ -911,9 +911,21 @@ void gpio_discovery(JsonObject& input, JsonArray& relay, JsonArray& light, JsonA
             case WINDOW:
                 strcpy_P(description, PSTR("window"));
                 break;
+            case CARBON_MONOXIDE:
+                strcpy_P(description, PSTR("carbon_monoxide"));
+                break;
+            case RUNNING:
+                strcpy_P(description, PSTR("running"));
+                break;
+            case TAMPER:
+                strcpy_P(description, PSTR("tamper"));
+                break;
+            case UPDATE:
+                strcpy_P(description, PSTR("update"));
+                break;
             case hasp_gpio_type_t::FREE:
             default:
-                break;
+                strcpy_P(description, PSTR("unknown"));
         }
 
         if((gpioConfig[i].type >= hasp_gpio_type_t::SWITCH && gpioConfig[i].type <= hasp_gpio_type_t::WINDOW) ||
@@ -959,7 +971,7 @@ bool gpioGetConfig(const JsonObject& settings)
         changed = true;
     }
 
-    if(changed) configOutput(settings);
+    if(changed) configOutput(settings, TAG_GPIO);
     return changed;
 }
 
@@ -973,7 +985,7 @@ bool gpioGetConfig(const JsonObject& settings)
  **/
 bool gpioSetConfig(const JsonObject& settings)
 {
-    configOutput(settings);
+    configOutput(settings, TAG_GPIO);
     bool changed = false;
 
     if(!settings[FPSTR(FP_GPIO_CONFIG)].isNull()) {
