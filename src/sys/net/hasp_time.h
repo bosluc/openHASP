@@ -25,7 +25,10 @@ bool timeSetConfig(const JsonObject& settings);
 #endif
 
 #ifndef TIMEZONE
-#define TIMEZONE "Etc/GMT0"
+#define TIMEZONE "Etc/Universal"
+#endif
+#ifndef TIMEREGION
+#define TIMEREGION "etc"
 #endif
 
 #ifndef NTPSERVER1

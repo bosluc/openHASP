@@ -763,6 +763,7 @@ void hasp_get_info(JsonDocument& doc)
     }
 #endif
 
+#if LV_MEM_CUSTOM == 0
     info = doc.createNestedObject(F(D_INFO_LVGL_MEMORY));
     lv_mem_monitor_t mem_mon;
     lv_mem_monitor(&mem_mon);
@@ -771,6 +772,7 @@ void hasp_get_info(JsonDocument& doc)
     Parser::format_bytes(mem_mon.free_size, size_buf, sizeof(size_buf));
     info[F(D_INFO_FREE_MEMORY)]   = size_buf;
     info[F(D_INFO_FRAGMENTATION)] = std::to_string(mem_mon.frag_pct) + "%";
+#endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -836,7 +838,7 @@ bool haspSetConfig(const JsonObject& settings)
         theme_changed |= configSet(haspThemeId, settings[FPSTR(FP_CONFIG_THEME)], F("haspThemeId"));
         theme_changed |= configSet(haspThemeHue, settings[FPSTR(FP_CONFIG_HUE)], F("haspThemeHue"));
         color_primary   = lv_color_hsv_to_rgb(haspThemeHue, 100, 100);
-        color_secondary = lv_color_hsv_to_rgb(haspThemeHue, 100, 100);
+        color_secondary = lv_color_hsv_to_rgb(20, 60, 100);
 
         // Check for color1 and color2
         theme_changed |= configSet(color_primary, settings[FPSTR(FP_CONFIG_COLOR1)], F("haspColor1"));
