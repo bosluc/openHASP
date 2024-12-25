@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2022 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #ifndef HASP_LOVYANGFX_TOUCH_DRIVER_H
@@ -48,8 +48,8 @@ class TouchLovyanGfx : public BaseTouch {
     void init(int w, int h)
     {
 #if defined(TOUCH_SDA) && defined(TOUCH_SCL) && defined(I2C_TOUCH_FREQUENCY)
-        Wire.begin(TOUCH_SDA, TOUCH_SCL, (uint32_t)I2C_TOUCH_FREQUENCY);
-        touch_scan(Wire);
+        // Wire.begin(TOUCH_SDA, TOUCH_SCL, (uint32_t)I2C_TOUCH_FREQUENCY);
+        // touch_scan(Wire);
 #endif
     }
 

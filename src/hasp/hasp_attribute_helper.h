@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2022 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #include "hasplib.h"
@@ -84,7 +84,7 @@ void my_obj_set_template(lv_obj_t* obj, const char* text)
         LOG_WARNING(TAG_ATTR, "Failed to allocate memory!");
 }
 
-// free the extended user_data when all properies are NULL
+// free the extended user_data when all properties are NULL
 static void my_prune_ext_tags(lv_obj_t* obj)
 {
     if(!obj || !obj->user_data.ext) return;
@@ -96,7 +96,7 @@ static void my_prune_ext_tags(lv_obj_t* obj)
     }
 }
 
-// create extended user_data properies object
+// create extended user_data properties object
 static hasp_ext_user_data_t* my_create_ext_tags(lv_obj_t* obj)
 {
     void* ext          = hasp_calloc(1, sizeof(hasp_ext_user_data_t));
@@ -237,7 +237,7 @@ const char* my_obj_get_action(lv_obj_t* obj)
 void my_obj_set_swipe(lv_obj_t* obj, const char* payload)
 {
     hasp_ext_user_data_t* ext     = (hasp_ext_user_data_t*)obj->user_data.ext;
-    static const char* _swipejson = R"({"down":"page back","left":"page next","right":"page prev"})";
+    static const char* _swipejson = R"({"down":"page back","left":"page next","right":"page prev","up":"page back"})";
 
     // extended tag exists, free old tag if it's not the const _swipejson
     if(ext) {
@@ -473,6 +473,31 @@ lv_obj_t* FindButtonLabel(lv_obj_t* btn)
 }
 
 // OK - lvgl does not return a const char *
+static const char* my_dropdown_get_text(const lv_obj_t* dd)
+{
+    const char* str_p = lv_dropdown_get_text((lv_obj_t*)dd);
+    return str_p ? str_p : "";
+}
+
+// OK - lvgl does not return a const char *
+static void my_dropdown_set_text(lv_obj_t* dd, const char* text)
+{
+    size_t len = 0;
+    if(text) len = strlen(text) + 1;
+
+    // release previous text
+    char* str_p = (char*)lv_dropdown_get_text(dd);
+    if(str_p) lv_mem_free(str_p);
+
+    // reserve and copy new text
+    str_p = (char*)lv_mem_alloc(len);
+    if(str_p != NULL) strncpy(str_p, text, len);
+
+    lv_dropdown_set_text((lv_obj_t*)dd, str_p); // library does not return const
+    lv_obj_invalidate(dd); // Needed if old ptr is equal to new ptr
+}
+
+// OK - lvgl does not return a const char *
 static const char* my_label_get_text(const lv_obj_t* label)
 {
     return lv_label_get_text(label); // library does not return const
@@ -606,6 +631,30 @@ static inline void my_btn_set_text(lv_obj_t* obj, const char* value)
         my_label_set_text(label, value);
     }
 }
+
+// OK - lvgl does not return a const char *
+#if HASP_USE_QRCODE > 0
+static const char* my_qrcode_get_text(const lv_obj_t* obj)
+{
+    if(!obj) {
+        LOG_WARNING(TAG_ATTR, F("QR-code not defined"));
+        return NULL;
+    }
+
+    if(obj) {
+        if(obj_check_type(obj, LV_HASP_QRCODE)) return lv_qrcode_get_text(obj);
+    } else {
+        LOG_WARNING(TAG_ATTR, F("my_qrcode_get_text NULL Pointer encountered"));
+    }
+
+    return NULL;
+}
+
+static void my_qrcode_set_text(lv_obj_t* obj, const char* text)
+{
+    lv_qrcode_set_text(obj, text);
+}
+#endif
 
 /**
  * Get the value_str for an object part and state.
@@ -921,7 +970,7 @@ static bool attribute_lookup_lv_property(uint16_t hash, uint8_t * prop)
     for(uint32_t i = 0; i < sizeof(props) / sizeof(props[0]); i++) {
         if(props[i].hash == hash) {
             *prop = props[1].prop;
-            LOG_WARNING(TAG_ATTR, F("%d found and has propery %d"), hash, props[i].prop);
+            LOG_WARNING(TAG_ATTR, F("%d found and has property %d"), hash, props[i].prop);
             return true;
         }
     }

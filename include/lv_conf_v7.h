@@ -80,8 +80,10 @@ typedef int16_t lv_coord_t;
 #define LV_FS_SEEK(x, y) lv_fs_seek(x, y)
 #define _lv_img_decoder_t _lv_img_decoder
 
+#ifndef LV_MEM_CUSTOM
   /* 1: use custom malloc/free, 0: use the built-in `lv_mem_alloc` and `lv_mem_free` */
 #define LV_MEM_CUSTOM      0
+#endif
 #if LV_MEM_CUSTOM == 0
 /* Size of the memory used by `lv_mem_alloc` in bytes (>= 2kB)*/
 
@@ -114,8 +116,8 @@ typedef int16_t lv_coord_t;
 #  define LV_MEM_AUTO_DEFRAG  1
 #else       /*LV_MEM_CUSTOM*/
 #define LV_MEM_CUSTOM_INCLUDE <stdlib.h>   /*Header for the dynamic memory function*/
-#define LV_MEM_CUSTOM_ALLOC   malloc       /*Wrapper to malloc*/
-#define LV_MEM_CUSTOM_FREE    free         /*Wrapper to free*/
+#define LV_MEM_CUSTOM_ALLOC   hasp_malloc  /*Wrapper to malloc*/
+#define LV_MEM_CUSTOM_FREE    hasp_free    /*Wrapper to free*/
 #endif     /*LV_MEM_CUSTOM*/
 
 #ifndef LV_VDB_SIZE
@@ -209,7 +211,7 @@ typedef void* lv_group_user_data_t;
 #define LV_USE_FILESYSTEM       1
 #if LV_USE_FILESYSTEM
 /*Declare the type of the user data of file system drivers (can be e.g. `void *`, `int`, `struct`)*/
-typedef void* lv_fs_drv_user_data_t;
+typedef const char* lv_fs_drv_user_data_t;
 
 /*File system interface*/
 #ifndef LV_USE_FS_IF
@@ -227,7 +229,9 @@ typedef void* lv_fs_drv_user_data_t;
 //#  define LV_FS_IF_SPIFFS   '\0'  // no internal esp Flash
 #endif
 #endif  /*LV_USE_FS_IF*/
+#if HASP_TARGET_ARDUINO && !defined(LV_FS_PC_PATH)
 #define LV_FS_PC_PATH "/littlefs"
+#endif
 
 #endif
 
@@ -254,7 +258,7 @@ typedef void* lv_fs_drv_user_data_t;
 #define LV_IMG_CACHE_DEF_SIZE       1
 #endif
 #ifndef LV_IMG_CACHE_DEF_SIZE_PSRAM
-#define LV_IMG_CACHE_DEF_SIZE_PSRAM 20    // special openHASP setting when PSRAM is used
+#define LV_IMG_CACHE_DEF_SIZE_PSRAM 12    // special openHASP setting when PSRAM is used
 #endif
 
  /*Declare the type of the user data of image decoder (can be e.g. `void *`, `int`, `struct`)*/
@@ -757,6 +761,10 @@ typedef void* lv_font_user_data_t;
   #define LV_THEME_DEFAULT_FONT_SMALL      &HASP_FONT_1
 #endif
 #endif // LV_FONT_DEFAULT
+
+#ifndef LV_THEME_DEFAULT_FONT_SMALL
+  #define LV_THEME_DEFAULT_FONT_SMALL      LV_FONT_DEFAULT
+#endif
 
 #define LV_THEME_DEFAULT_FONT_NORMAL       LV_FONT_DEFAULT
 #define LV_THEME_DEFAULT_FONT_SUBTITLE     LV_FONT_DEFAULT

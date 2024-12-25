@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2022 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #ifndef HASP_TFT_DEFINES_H
@@ -12,6 +12,22 @@
 
 #ifndef TOUCH_IRQ
 #define TOUCH_IRQ -1
+#endif
+
+#ifndef TOUCH_RST
+#define TOUCH_RST -1
+#endif
+
+#ifndef TFT_DMA_CHANNEL
+#define TFT_DMA_CHANNEL 0
+#endif
+
+#ifndef TFT_SPI_MODE
+#define TFT_SPI_MODE 0
+#endif
+
+#ifndef TFT_SPI_HOST
+#define TFT_SPI_HOST 3
 #endif
 
 #ifndef TFT_MOSI
@@ -96,6 +112,12 @@
 #endif
 #ifndef SPI_READ_FREQUENCY
 #define SPI_READ_FREQUENCY 0
+#endif
+#ifndef TFT_OFFSET_X
+#define TFT_OFFSET_X 0
+#endif
+#ifndef TFT_OFFSET_Y
+#define TFT_OFFSET_Y 0
 #endif
 #ifndef TFT_OFFSET_ROTATION
 #define TFT_OFFSET_ROTATION 0

@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2022 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #ifndef HASP_ATTRIBUTE_H
@@ -25,6 +25,7 @@ void my_btnmatrix_map_clear(lv_obj_t* obj);
 void my_msgbox_map_clear(lv_obj_t* obj);
 void my_line_clear_points(lv_obj_t* obj);
 void my_image_release_resources(lv_obj_t* obj);
+void my_obj_del_task(const lv_obj_t* obj);
 
 void hasp_process_obj_attribute(lv_obj_t* obj, const char* attr_p, const char* payload, bool update);
 
@@ -432,6 +433,7 @@ _HASP_ATTRIBUTE(SCALE_END_LINE_WIDTH, scale_end_line_width, lv_style_int_t)
 #define ATTR_COMMENT 62559
 #define ATTR_TAG 7866
 #define ATTR_JSONL 61604
+#define ATTR_MODE_FIXED 35736
 
 // methods
 #define ATTR_DELETE 50027

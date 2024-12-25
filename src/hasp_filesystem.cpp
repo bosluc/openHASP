@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2023 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #ifdef ARDUINO
@@ -180,7 +180,7 @@ void filesystemList()
 #else
     if(!HASP_FS.begin(true)) {            // default vfs path: /littlefs
 #endif
-        LOG_ERROR(TAG_FILE, F("Flash file system not mouted."));
+        LOG_ERROR(TAG_FILE, F("Flash file system not mounted."));
     } else {
 
         LOG_VERBOSE(TAG_FILE, F("Listing files on the internal flash:"));
@@ -288,14 +288,14 @@ bool filesystemSetup(void)
     // no SPIFFS settings, as settings depend on SPIFFS
     // no Logging, because it depends on the configuration file
 
-    // Logging is defered until debugging has started
+    // Logging is deferred until debugging has started
     // FS success or failure is printed at that time !
 
 #if HASP_USE_SPIFFS > 0 || HASP_USE_LITTLEFS > 0
 #if defined(ARDUINO_ARCH_ESP8266)
     if(!HASP_FS.begin()) {
 #else
-    if(HASP_FS.begin(false)) return true; // already formated
+    if(HASP_FS.begin(false)) return true; // already formatted
 
     if(!HASP_FS.begin(true)) { // format partition
 #endif

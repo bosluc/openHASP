@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2022 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 /***************************************************
@@ -77,6 +77,7 @@
 // #define HASP_LANGUAGE pt_BR                       // Brazilian Portuguese
 // #define HASP_LANGUAGE pt_PT                       // Portuguese
 // #define HASP_LANGUAGE ro_RO                       // Romanian
+// #define HASP_LANGUAGE de_DE                       // German
 
 /***************************************************
  *        Web interface coloring
@@ -134,7 +135,7 @@
 // #define HASP_FONT_SIZE_4 48
 // #define HASP_FONT_SIZE_5 12
 
-#define LV_FONT_DEFAULT &HASP_FONT_1
+// #define LV_FONT_DEFAULT &HASP_FONT_1
 
 /***************************************************
  *        GPIO Settings
@@ -147,7 +148,6 @@
  **************************************************/
 //#define HASP_USE_MDNS 0                             // Disable MDNS
 //#define HASP_USE_CUSTOM 1                           // Enable compilation of custom code from /src/custom
-//#define HASP_USE_HA                                 // Enable Home Assistant auto-discovery
 //#define HASP_START_CONSOLE 0                        // Disable starting of serial console at boot
 //#define HASP_START_TELNET 0                         // Disable starting of telnet service at boot
 //#define HASP_START_HTTP 0                           // Disable starting of web interface at boot

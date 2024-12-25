@@ -1,8 +1,11 @@
-/* MIT License - Copyright (c) 2019-2023 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 //#include "webServer.h"
 #include "hasplib.h"
+
+#if HASP_USE_HTTP_ASYNC > 0
+
 #include "ArduinoLog.h"
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -16,7 +19,6 @@
 #include "hasp_gui.h"
 #include "hasp_debug.h"
 
-#if HASP_USE_HTTP_ASYNC > 0
 #include "sys/net/hasp_network.h"
 
 /* clang-format off */
@@ -487,7 +489,7 @@ void webHandleAbout(AsyncWebServerRequest* request)
     String httpMessage((char*)0);
     httpMessage.reserve(HTTP_PAGE_SIZE);
 
-    httpMessage += F("<p><h3>openHASP</h3>Copyright&copy; 2019-2022 Francis Van Roie ");
+    httpMessage += F("<p><h3>openHASP</h3>Copyright&copy; 2019-2024 Francis Van Roie ");
     httpMessage += mitLicense;
     httpMessage += F("<p>Based on the previous work of the following open source developers.</p><hr>");
     httpMessage += F("<p><h3>HASwitchPlate</h3>Copyright&copy; 2019 Allen Derusha allen@derusha.org</b>");
@@ -934,7 +936,7 @@ int handleFileRead(AsyncWebServerRequest* request, String path)
 
         if(!strncasecmp(file.name(), configFile.c_str(), configFile.length())) {
             file.close();
-            DynamicJsonDocument settings(8 * 256);
+            DynamicJsonDocument settings(MAX_CONFIG_JSON_ALLOC_SIZE);
             DeserializationError error = configParseFile(configFile, settings);
 
             if(error) return 500; // Internal Server Error
@@ -1259,7 +1261,7 @@ void webHandleMqttConfig(AsyncWebServerRequest* request)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void webHandleGuiConfig(AsyncWebServerRequest* request)
-{ // http://plate01/config/wifi
+{ // http://plate01/config/gui
     if(!httpIsAuthenticated(request, F("config/gui"))) return;
 
     {
@@ -1309,7 +1311,7 @@ void webHandleGuiConfig(AsyncWebServerRequest* request)
         httpMessage += getOption(-1, F("None"), bcklpin == -1);
 #if defined(ARDUINO_ARCH_ESP32)
         add_gpio_select_option(httpMessage, 5, bcklpin);  // D8 on ESP32 for D1 mini 32
-        add_gpio_select_option(httpMessage, 12, bcklpin); // TFT_LED on the Liligo Pi
+        add_gpio_select_option(httpMessage, 12, bcklpin); // TFT_LED on the Lilygo Pi
         add_gpio_select_option(httpMessage, 13, bcklpin); // TFT_LED on the D1 R32 + Waveshare
         add_gpio_select_option(httpMessage, 15, bcklpin); // TFT_LED on the AZ Touch
         add_gpio_select_option(httpMessage, 16, bcklpin); // D4 on ESP32 for D1 mini 32
@@ -1477,7 +1479,7 @@ void webHandleGpioConfig(AsyncWebServerRequest* request)
 
                     switch(conf.type) {
 
-                        case hasp_gpio_type_t::BUTTON:
+                        case hasp_gpio_type_t::BUTTON_TYPE:
                             httpMessage += F(D_GPIO_BUTTON);
                             break;
                         case hasp_gpio_type_t::SWITCH:
@@ -1755,8 +1757,8 @@ void webHandleGpioInput(AsyncWebServerRequest* request)
         bool selected;
         httpMessage += F("<p><b>Type</b> <select id='type' name='type'>");
 
-        selected = (conf.type == hasp_gpio_type_t::BUTTON);
-        httpMessage += getOption(hasp_gpio_type_t::BUTTON, F(D_GPIO_BUTTON), selected);
+        selected = (conf.type == hasp_gpio_type_t::BUTTON_TYPE);
+        httpMessage += getOption(hasp_gpio_type_t::BUTTON_TYPE, F(D_GPIO_BUTTON), selected);
 
         selected = (conf.type == hasp_gpio_type_t::SWITCH);
         httpMessage += getOption(hasp_gpio_type_t::SWITCH, F(D_GPIO_SWITCH), selected);
@@ -2359,7 +2361,7 @@ bool httpGetConfig(const JsonObject& settings)
  *
  * Read the settings from json and sets the application variables.
  *
- * @note: data pixel should be formated to uint32_t RGBA. Imagemagick requirements.
+ * @note: data pixel should be formatted to uint32_t RGBA. Imagemagick requirements.
  *
  * @param[in] settings    JsonObject with the config settings.
  **/

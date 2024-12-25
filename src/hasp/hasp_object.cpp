@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2022 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 /* ********************************************************************************************
@@ -179,7 +179,7 @@ int hasp_parse_json_attributes(lv_obj_t* obj, const JsonObject& doc)
 {
     int i = 0;
 
-#if defined(WINDOWS) || defined(POSIX) || defined(ESP32)
+#if HASP_TARGET_PC || defined(ESP32)
     std::string v;
     v.reserve(64);
 
@@ -270,19 +270,19 @@ void hasp_new_object(const JsonObject& config, uint8_t& saved_page_id)
         /* Create the object first */
 
         /* Validate type */
-        if(config[FPSTR(FP_OBJID)].isNull()) { // TODO: obsolete objid
+       // if(config[FPSTR(FP_OBJID)].isNull()) { // TODO: obsolete objid
             if(config[FPSTR(FP_OBJ)].isNull()) {
                 return; // comments
             } else {
                 sdbm = Parser::get_sdbm(config[FPSTR(FP_OBJ)].as<const char*>());
                 config.remove(FPSTR(FP_OBJ));
             }
-        } else {
-            LOG_WARNING(TAG_HASP, F(D_ATTRIBUTE_OBSOLETE D_ATTRIBUTE_INSTEAD), "objid",
-                        "obj"); // TODO: obsolete objid
-            sdbm = config[FPSTR(FP_OBJID)].as<uint8_t>();
-            config.remove(FPSTR(FP_OBJID));
-        }
+        // } else {
+        //     LOG_WARNING(TAG_HASP, F(D_ATTRIBUTE_OBSOLETE D_ATTRIBUTE_INSTEAD), "objid",
+        //                 "obj"); // TODO: obsolete objid
+        //     sdbm = config[FPSTR(FP_OBJID)].as<uint8_t>();
+        //     config.remove(FPSTR(FP_OBJID));
+        // }
 
         switch(sdbm) {
                 /* ----- Custom Objects ------ */
@@ -354,7 +354,7 @@ void hasp_new_object(const JsonObject& config, uint8_t& saved_page_id)
                     lv_obj_set_event_cb(obj, generic_event_handler);
                     obj->user_data.objid = LV_HASP_LABEL;
 
-                    if(id >= 250) object_add_task(obj, event_timer_clock, 1000);
+                    // if(id >= 250) object_add_task(obj, event_timer_clock, 1000);
                 }
                 break;
 
@@ -376,6 +376,17 @@ void hasp_new_object(const JsonObject& config, uint8_t& saved_page_id)
                     obj->user_data.objid = LV_HASP_IMAGE;
                 }
                 break;
+
+#if HASP_USE_QRCODE > 0
+            case LV_HASP_QRCODE:
+            case HASP_OBJ_QRCODE:
+                obj = lv_qrcode_create(parent_obj, 140, LV_COLOR_BLACK, LV_COLOR_WHITE);
+                if(obj) {
+                    lv_obj_set_event_cb(obj, delete_event_handler);
+                    obj->user_data.objid = LV_HASP_QRCODE;
+                }
+                break;
+#endif
 
             case LV_HASP_ARC:
             case HASP_OBJ_ARC:
@@ -629,6 +640,7 @@ void hasp_new_object(const JsonObject& config, uint8_t& saved_page_id)
             case HASP_OBJ_DROPDOWN:
                 obj = lv_dropdown_create(parent_obj, NULL);
                 if(obj) {
+                    lv_dropdown_set_text(obj, NULL); // Clear default text
                     lv_dropdown_set_draw_arrow(obj, true);
                     // lv_dropdown_set_anim_time(obj, 200);
                     lv_obj_set_top(obj, true);

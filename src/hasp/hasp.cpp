@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2023 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #include "hasplib.h"
@@ -11,7 +11,7 @@
 #include "ArduinoLog.h"
 #endif
 
-#if defined(WINDOWS) || defined(POSIX)
+#if HASP_TARGET_PC
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -111,7 +111,8 @@ lv_font_t* hasp_get_font(uint8_t fontid)
  */
 HASP_ATTRIBUTE_FAST_MEM void hasp_update_sleep_state()
 {
-    if(hasp_first_touch_state) return; // don't update sleep when first touch is still active
+    // Don't fast exit, see issue #839
+    // if(hasp_first_touch_state) return; // don't update sleep when first touch is still active
 
     uint32_t idle = lv_disp_get_inactive_time(lv_disp_get_default()) / 1000;
     idle += sleepTimeOffset; // To force a specific state
@@ -121,18 +122,21 @@ HASP_ATTRIBUTE_FAST_MEM void hasp_update_sleep_state()
             gui_hide_pointer(true);
             hasp_sleep_state = HASP_SLEEP_LONG;
             dispatch_idle_state(HASP_SLEEP_LONG);
+            dispatch_run_script(NULL, "L:/idle_long.cmd", TAG_HASP);
         }
     } else if(sleepTimeShort > 0 && idle >= sleepTimeShort) {
         if(hasp_sleep_state != HASP_SLEEP_SHORT) {
             gui_hide_pointer(true);
             hasp_sleep_state = HASP_SLEEP_SHORT;
             dispatch_idle_state(HASP_SLEEP_SHORT);
+            dispatch_run_script(NULL, "L:/idle_short.cmd", TAG_HASP);
         }
     } else {
         if(hasp_sleep_state != HASP_SLEEP_OFF) {
             gui_hide_pointer(false);
             hasp_sleep_state = HASP_SLEEP_OFF;
             dispatch_idle_state(HASP_SLEEP_OFF);
+            dispatch_run_script(NULL, "L:/idle_off.cmd", TAG_HASP);
         }
     }
 }
@@ -158,7 +162,7 @@ void hasp_set_sleep_state(uint8_t state)
             break;
         case HASP_SLEEP_OFF:
             hasp_set_sleep_offset(0);
-            hasp_set_wakeup_touch(false);
+            // hasp_set_wakeup_touch(false);
             break;
         default:
             return;
@@ -214,11 +218,12 @@ void hasp_antiburn_cb(lv_task_t* task)
     lv_obj_t* layer = lv_disp_get_layer_sys(NULL);
     if(layer) {
         // Fill a buffer with random colors
-        lv_color_t color[1223];
-        size_t len = sizeof(color) / sizeof(color[0]);
-        for(size_t x = 0; x < len; x++) {
+        lv_color_t color[1223]; // prime
+        size_t max_len = sizeof(color) / sizeof(color[0]);
+        for(size_t x = 0; x < max_len; x++) {
             color[x].full = HASP_RANDOM(UINT16_MAX);
         }
+        max_len -= 64; // leave some headroom to randomize
 
         // list of possible draw widths; prime numbers combat recurring patterns on the screen
         uint8_t prime[] = {61,  67,  73,  79,  83,  89,  97,  103, 109, 113, 127, 131, 137, 139, 149,
@@ -227,17 +232,27 @@ void hasp_antiburn_cb(lv_task_t* task)
         lv_disp_t* disp         = lv_disp_get_default();
         lv_disp_drv_t* disp_drv = &disp->driver;
 
-        lv_coord_t scr_h = lv_obj_get_height(layer) - 1;
-        lv_coord_t scr_w = lv_obj_get_width(layer) - 1;
-        lv_coord_t w     = 487; // first prime larger than 480
+        lv_coord_t scr_h;
+        lv_coord_t scr_w;
+
+        if(disp_drv->sw_rotate) {
+            scr_w = disp_drv->hor_res - 1; // use hardware w
+            scr_h = disp_drv->ver_res - 1; // use hardware h
+        } else {
+            scr_w = lv_obj_get_width(layer) - 1;  // use software w
+            scr_h = lv_obj_get_height(layer) - 1; // use software h
+        }
+
+        lv_coord_t w = scr_w; // maximum screen width
         lv_area_t area;
 
         area.y1 = 0;
         while(area.y1 <= scr_h) {
-            if(w > scr_w) w = scr_w; // limit to the actual screenwidth
-            if(w > len) w = len;     // don't overrun the buffer
-            lv_coord_t h    = len / w;
-            size_t headroom = len % w; // additional bytes in the buffer that can be used for a random offset
+            if(w > scr_w) w = scr_w;     // limit to the actual screenwidth
+            if(w > max_len) w = max_len; // don't overrun the buffer
+            lv_coord_t h    = max_len / w;
+            size_t headroom = (sizeof(color) / sizeof(color[0])) -
+                              (h * w); // additional bytes in the buffer that can be used for a random offset
 
             area.y2 = area.y1 + h - 1;
             if(area.y2 > scr_h) area.y2 = scr_h;
@@ -252,16 +267,16 @@ void hasp_antiburn_cb(lv_task_t* task)
                 area.x1 += w;
             }
 
-            w = prime[HASP_RANDOM(sizeof(prime))]; // new random width
+            w = prime[HASP_RANDOM(sizeof(prime) / sizeof(prime[0]))]; // new random width
             area.y1 += h;
         }
     }
 
-    if(task->repeat_count != 1) return; // don't stop yet
-
     // task is about to get deleted
-    hasp_stop_antiburn();
-    dispatch_state_antiburn(HASP_EVENT_OFF);
+    if(task->repeat_count == 1) {
+        hasp_stop_antiburn();
+        dispatch_state_antiburn(HASP_EVENT_OFF);
+    }
 }
 
 /**
@@ -387,7 +402,7 @@ void haspReconnect()
 
 // String progress_str((char *)0);
 
-// Shows/hides the the global progress bar and updates the value
+// Shows/hides the global progress bar and updates the value
 void haspProgressVal(uint8_t val)
 {
     lv_obj_t* layer = lv_disp_get_layer_sys(NULL);
@@ -818,7 +833,7 @@ bool haspGetConfig(const JsonObject& settings)
  *
  * Read the settings from json and sets the application variables.
  *
- * @note: data pixel should be formated to uint32_t RGBA. Imagemagick requirements.
+ * @note: data pixel should be formatted to uint32_t RGBA. Imagemagick requirements.
  *
  * @param[in] settings    JsonObject with the config settings.
  **/
@@ -829,20 +844,20 @@ bool haspSetConfig(const JsonObject& settings)
     JsonVariant color_str;
     bool changed = false;
 
-    changed |= configSet(haspStartPage, settings[FPSTR(FP_CONFIG_STARTPAGE)], F("haspStartPage"));
-    changed |= configSet(haspStartDim, settings[FPSTR(FP_CONFIG_STARTDIM)], F("haspStartDim"));
+    changed |= configSet(haspStartPage, settings[FPSTR(FP_CONFIG_STARTPAGE)], "haspStartPage");
+    changed |= configSet(haspStartDim, settings[FPSTR(FP_CONFIG_STARTDIM)], "haspStartDim");
 
     { // Theme related settings
         // Set from Hue first
         bool theme_changed = false;
-        theme_changed |= configSet(haspThemeId, settings[FPSTR(FP_CONFIG_THEME)], F("haspThemeId"));
-        theme_changed |= configSet(haspThemeHue, settings[FPSTR(FP_CONFIG_HUE)], F("haspThemeHue"));
+        theme_changed |= configSet(haspThemeId, settings[FPSTR(FP_CONFIG_THEME)], "haspThemeId");
+        theme_changed |= configSet(haspThemeHue, settings[FPSTR(FP_CONFIG_HUE)], "haspThemeHue");
         color_primary   = lv_color_hsv_to_rgb(haspThemeHue, 100, 100);
         color_secondary = lv_color_hsv_to_rgb(20, 60, 100);
 
         // Check for color1 and color2
-        theme_changed |= configSet(color_primary, settings[FPSTR(FP_CONFIG_COLOR1)], F("haspColor1"));
-        theme_changed |= configSet(color_secondary, settings[FPSTR(FP_CONFIG_COLOR2)], F("haspColor2"));
+        theme_changed |= configSet(color_primary, settings[FPSTR(FP_CONFIG_COLOR1)], "haspColor1");
+        theme_changed |= configSet(color_secondary, settings[FPSTR(FP_CONFIG_COLOR2)], "haspColor2");
 
         changed |= theme_changed;
         // if(theme_changed) hasp_set_theme(haspThemeId); // LVGL is not inited at config load time

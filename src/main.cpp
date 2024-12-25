@@ -1,7 +1,5 @@
-/* MIT License - Copyright (c) 2019-2023 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
-
-#if !(defined(WINDOWS) || defined(POSIX))
 
 /*
 #ifdef CORE_DEBUG_LEVEL
@@ -28,9 +26,9 @@
 #include "hasp_gui.h"
 #endif
 
-bool isConnected;
-uint8_t mainLoopCounter        = 0;
-unsigned long mainLastLoopTime = 0;
+static bool isConnected;
+static uint8_t mainLoopCounter        = 0;
+static unsigned long mainLastLoopTime = 0;
 
 #ifdef HASP_USE_STAT_COUNTER
 uint16_t statLoopCounter = 0; // measures the average looptime
@@ -40,11 +38,23 @@ void setup()
 {
     //   hal_setup();
 
+#if HASP_TARGET_ARDUINO
     esp_log_level_set("*", ESP_LOG_NONE); // set all components to ERROR level
     // esp_log_level_set("wifi", ESP_LOG_NONE);              // enable WARN logs from WiFi stack
     // esp_log_level_set("dhcpc", ESP_LOG_INFO);             // enable INFO logs from DHCP client
     // esp_log_level_set("esp_crt_bundle", ESP_LOG_VERBOSE); // enable WARN logs from WiFi stack
     // esp_log_level_set("esp_tls", ESP_LOG_VERBOSE);        // enable WARN logs from WiFi stack
+#elif HASP_TARGET_PC
+    // Initialize lvgl environment
+    lv_init();
+    lv_log_register_print_cb(debugLvglLogEvent);
+#if HASP_USE_CONFIG
+    // initialize FS before running configSetup()
+    // normally, it's initialized in guiSetup(), but Arduino doesn't need FS in configSetup()
+    lv_fs_if_init();
+#endif
+#endif
+
     haspDevice.init();
 
     /****************************
@@ -126,7 +136,7 @@ void setup()
     slaveSetup();
 #endif
 
-#if defined(HASP_USE_CUSTOM)
+#if defined(HASP_USE_CUSTOM) && HASP_USE_CUSTOM > 0
     custom_setup();
 #endif
 
@@ -149,15 +159,15 @@ void setup()
     gui_setup_lvgl_task();
 #endif // HASP_USE_LVGL_TASK
 
-    mainLastLoopTime = -1000; // reset loop counter
+    mainLastLoopTime = 0; // reset loop counter
 }
 
 IRAM_ATTR void loop()
 {
 #if defined(ESP32) && defined(HASP_USE_ESP_MQTT)
-    if(!gui_acquire()) {
+    if(!gui_acquire(portMAX_DELAY)) {
         // LOG_ERROR(TAG_MAIN, F("TAKE Mutex"));
-        delay(10); // ms
+        delay(5); // ms
         return;
     }
 #endif
@@ -185,7 +195,7 @@ IRAM_ATTR void loop()
     consoleLoop();
 #endif
 
-#if defined(HASP_USE_CUSTOM)
+#if defined(HASP_USE_CUSTOM) && HASP_USE_CUSTOM > 0
     custom_loop();
 #endif
 
@@ -195,10 +205,14 @@ IRAM_ATTR void loop()
 
     /* Timer Loop */
     if(millis() - mainLastLoopTime >= 1000) {
-        mainLastLoopTime += 1000;
+        mainLastLoopTime = millis();
 
         /* Runs Every Second */
         haspEverySecond(); // sleep timer & statusupdate
+
+#if HASP_USE_MQTT > 0
+        mqttEverySecond();
+#endif
 
 #if HASP_USE_FTP > 0
         ftpEverySecond();
@@ -208,7 +222,7 @@ IRAM_ATTR void loop()
         telnetEverySecond();
 #endif
 
-#if defined(HASP_USE_CUSTOM)
+#if defined(HASP_USE_CUSTOM) && HASP_USE_CUSTOM > 0
         custom_every_second();
 #endif
         // debugEverySecond();
@@ -229,7 +243,7 @@ IRAM_ATTR void loop()
                 //   gpioEvery5Seconds();
 #endif
 
-#if defined(HASP_USE_CUSTOM)
+#if defined(HASP_USE_CUSTOM) && HASP_USE_CUSTOM > 0
                 custom_every_5seconds();
 #endif
                 break;
@@ -237,10 +251,9 @@ IRAM_ATTR void loop()
             case 4:
 #if HASP_USE_WIFI > 0 || HASP_USE_ETHERNET > 0
                 isConnected = networkEvery5Seconds(); // Check connection
-
+#endif
 #if HASP_USE_MQTT > 0
                 mqttEvery5Seconds(isConnected);
-#endif
 #endif
                 break;
 
@@ -264,11 +277,9 @@ IRAM_ATTR void loop()
 #ifdef ARDUINO_ARCH_ESP8266
     delay(2); // ms
 #else
-    delay(5); // ms
+    delay(2); // ms
 #endif
 #else // HASP_USE_LVGL_TASK != 0
-    delay(10); // ms
+    delay(2); // ms
 #endif
 }
-
-#endif

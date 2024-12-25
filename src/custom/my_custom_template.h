@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2022 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 // USAGE: - Copy this file and rename it to my_custom.h
@@ -9,7 +9,7 @@
 #define HASP_CUSTOM_H
 
 #include "hasplib.h"
-#if defined(HASP_USE_CUSTOM)
+#if defined(HASP_USE_CUSTOM) && HASP_USE_CUSTOM > 0
 
 /* This function is called at boot */
 void custom_setup();
@@ -31,6 +31,11 @@ void custom_get_sensors(JsonDocument& doc);
 
 /* Receive custom topic & payload messages */
 void custom_topic_payload(const char* topic, const char* payload, uint8_t source);
+
+/* Get notified when a state message is sent out */
+/* Can be used to send state changes through other means then MQTT, e.g. Serial2 */
+/* https://github.com/HASwitchPlate/openHASP/issues/611 */
+void custom_state_subtopic(const char* subtopic, const char* payload);
 
 #endif // HASP_USE_CUSTOM
 

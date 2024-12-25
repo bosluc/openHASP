@@ -2,19 +2,26 @@
 
 ## v0.7.0
 
-!!! THE PARTITION SCHEME OF THE INTERNAL FLASH HAS CHANGED !!!
+!!! THE PARTITION SCHEME OF THE INTERNAL FLASH HAS CHANGED, CHECK THE DOCS BEFORE UPGRADING !!!
+
+### Commands
+- Removed deprecated `dim`, `brightness` and `light` commands, use `backlight` instead
 
 ### Objects
 <!-- ? Support for State and Part properties -->
 - `action` and `swipe` can now be set to any command
-- Set default line_width of new `line` objects to 1
+- Set default `line_width` of new `line` objects to 1
+- Add `qrcode` object (thanks @marsman7)
 - Allow line and block comments in pages.jsonl
+- Removed deprecated `txt` property, use `text` instead
+- Removed deprecated `objid` property, use `obj` instead
 - HASP theme: Toggle objects now use the secondary color when they are in the toggled state.
 
 ### Fonts
 - Firmware files include the bitmapped font sizes 12, 16, 24 and 32pt
 - Use embedded TrueType font for other font sizes (PSram highly recommended)
-- Add glyphs from character sets Cyrillic, Latin-2, Greek and Viernamese to default fonts
+- Add glyphs from Cyrillic, Latin-2, Greek and Viernamese character sets to default fonts
+- Add 12 new MDI icons
 
 ### Web UI
 - Update Web UI to petite-vue app
@@ -26,29 +33,34 @@
 - Make the MQTT topics configurable
 - MQTT discovery now uses a subtopic of `hasp/discovery`. Discovery requires version 0.7.x of the Custom Component.
 - Add service start/stop mqtt
-- Add SimpleFTPServer to easily upload and download files to the plate *(one simultanious connection only)*
+- Add SimpleFTPServer to easily upload and download files to the plate *(one simultaneous connection only)*
 - Add service start/stop ftp
 - Add configuration for NTP servers and timezone
+- Add support system scripts executed when the idle level is changed
+- Add support for WireGuard (thanks @perexg)
 
 ### Devices
+- Add Elecrow ESP32-Terminal 3.5" SPI and RGB
 - Add GS-T3E Smart Panel
 - Add Lilygo Ttgo Lily Pi ESP32
 - Add Makerfabs ESP32-S3 SPI
 - Add Sunton ESP32-S3 TFT 4.3", 5.0" and 7.0"
 - Add Sunton ESP32-2432S028R ESP32-3248S035C ESP32-3248S035R
-- Add support for Wireless-Tag WT32-SC01 Plus and WT-86-32-3ZW1
+- Add support for Wireless-Tag WT32-SC01 Plus and WT32S3-86V
+- Deprecate support for WT-86-32-3ZW1 with ESP32-S2
+- Fade backlight on ESP32 devices (thanks @presslab-us)
 
 ## Bug fixes
 - Fix for first touch not working properly
 - Add button GPIOs to input discovery message
 
 ### Architecture
-- Moved to Tasmota Arduino 2.0.6 and ESP-IDF 4.4.3 (thanks @Jason2866)
+- Moved to Tasmota Arduino 2.0.11 and ESP-IDF 4.4.5 (thanks @Jason2866)
 - Add Arduino-GFX display driver
-- Add support for ESP32-S3 devices
-- Deprication of support for ESP32-S2 devices due to lack of sRAM
+- Add support for ESP32-S3 and ESP32-C3 devices
+- Deprecation of support for ESP32-S2 devices due to lack of sRAM
 
-Updated libraries to ArduinoJson 6.20.1, ArduinoStreamUtils 1.7.0, TFT_eSPI 2.5.0, LovyanGFX 1.1.2 and SimpleFTPServer 2.1.5
+Updated libraries to Arduino_GFX v1.4.0, ArduinoJson 6.21.5, ArduinoStreamUtils 1.8.0, AceButton 1.10.1, TFT_eSPI 2.5.43, LovyanGFX 1.1.12 and SimpleFTPServer 2.1.5
 
 
 ## v0.6.3
@@ -68,7 +80,7 @@ Updated libraries to ArduinoJson 6.20.1, ArduinoStreamUtils 1.7.0, TFT_eSPI 2.5.
 ### Web UI
 - Updated to modern responsive design *(requires JavaScript)*
 - Add `/api/info/` and `/api/config/*/` endpoints
-- Allow for a customizible `vars.css`, `style.css`, `script.js` and `edit.htm`
+- Allow for a customizable `vars.css`, `style.css`, `script.js` and `edit.htm`
 - Display a message when the configuration is changed and a reboot is needed
 - Add checkbox for backlight inversion to Display settings (thanks @wolffman122)
 - Add checkbox to toggle ANSI codes #261 (thanks @geiseri)
@@ -134,7 +146,7 @@ Updated libraries to ArduinoJson 6.19.4, ArduinoStreamUtils 1.6.3, AceButton 1.9
 - Add AZ-Touch MOD ESP32 with 2.4" or 2.8"
 - Add Lilygo®Ttgo Pi ESP32 with TFT 3.5"
 - Add Waveshare ESP32 One development board with Rpi MHS4001(B) or Waveshare RPi(C) LCD display
-- Add D1-R32 ESP32 development board with with Waveshare ILI9486 Touch Shield
+- Add D1-R32 ESP32 development board with Waveshare ILI9486 Touch Shield
 
 ### Bug fixes
 - Fix bug that caused a crash when both `btnmatrix` and `msgbox` where used (thanks @AndreTeixeira1998)
@@ -158,23 +170,23 @@ Updated libraries to AceButton 1.9.1 and ArduinoJson 6.18.5
 - Run `/online.cmd` or `/offline.cmd` script when the wifi status changed
 
 ### Objects
-- Add new *[line](https://openhasp.haswitchplate.com/0.6.1/design/objects/#line)* object
-- Add `val` to *[btnmatrix](https://openhasp.haswitchplate.com/0.6.1/design/objects/#button-matrix)* when `one_select` is set
-- Cache up to 20 *[images](https://openhasp.haswitchplate.com/0.6.1/design/objects/#image)* in PSram when available
-- Improve precision on the *[linemeter](https://openhasp.haswitchplate.com/0.6.1/design/objects/#line-meter)* scales
-- Fix *[dropdown](https://openhasp.haswitchplate.com/0.6.1/design/objects/#dropdown-list)* redraw bug
+- Add new *[line](https://www.openhasp.com/0.6.1/design/objects/#line)* object
+- Add `val` to *[btnmatrix](https://www.openhasp.com/0.6.1/design/objects/#button-matrix)* when `one_select` is set
+- Cache up to 20 *[images](https://www.openhasp.com/0.6.1/design/objects/#image)* in PSram when available
+- Improve precision on the *[linemeter](https://www.openhasp.com/0.6.1/design/objects/#line-meter)* scales
+- Fix *[dropdown](https://www.openhasp.com/0.6.1/design/objects/#dropdown-list)* redraw bug
 
 ### Devices
-- Fix [L8-HD dimmer](https://openhasp.haswitchplate.com/0.6.1/devices/lanbon-l8/) not responding correctly to mqtt after a reboot
-- Add [M5Stack Core2](https://openhasp.haswitchplate.com/0.6.1/devices/m5stack-core2/) backlight dimming
-- Add [Yeacreate Nscreen32](https://openhasp.haswitchplate.com/0.6.1/devices/yeacreate-nscreen32/)
-- Add [Makerfabs ESP32 TFT Touch](https://openhasp.haswitchplate.com/0.6.1/devices/makerfabs-tft-touch/) Capacitive
+- Fix [L8-HD dimmer](https://www.openhasp.com/0.6.1/devices/lanbon-l8/) not responding correctly to mqtt after a reboot
+- Add [M5Stack Core2](https://www.openhasp.com/0.6.1/devices/m5stack-core2/) backlight dimming
+- Add [Yeacreate Nscreen32](https://www.openhasp.com/0.6.1/devices/yeacreate-nscreen32/)
+- Add [Makerfabs ESP32 TFT Touch](https://www.openhasp.com/0.6.1/devices/makerfabs-tft-touch/) Capacitive
 
 ### Fonts
-- [Additional characters](https://openhasp.haswitchplate.com/0.6.1/design/fonts/#ascii): `²` (squared) and `³` (cubed)
-- [Additional icons](https://openhasp.haswitchplate.com/0.6.1/design/fonts/#built-in-icons): recycle-variant and additional weather icons
-- Use latin1 as default charset on [WT32-SC01](https://openhasp.haswitchplate.com/0.6.1/devices/wt32-sc01/)
-- Add [Greek font](https://openhasp.haswitchplate.com/0.6.1/design/fonts/#greek)
+- [Additional characters](https://www.openhasp.com/0.6.1/design/fonts/#ascii): `²` (squared) and `³` (cubed)
+- [Additional icons](https://www.openhasp.com/0.6.1/design/fonts/#built-in-icons): recycle-variant and additional weather icons
+- Use latin1 as default charset on [WT32-SC01](https://www.openhasp.com/0.6.1/devices/wt32-sc01/)
+- Add [Greek font](https://www.openhasp.com/0.6.1/design/fonts/#greek)
 
 ### Compiling
 - Allow custom bootlogo
@@ -187,7 +199,7 @@ Updated libraries to AceButton 1.9.1 and ArduinoJson 6.18.5
 ### Commands:
 - Obsolete `dim` and `light` commands, use `backlight` command instead
 - Add `discovery` command to facilitate HA CC discovery
-- Add `idle` command to retreive idle state, replaces `wakeup` command
+- Add `idle` command to retrieve idle state, replaces `wakeup` command
 - Updated `moodlight` command with brightness support
 - Rewrite `outputX` and add `inputX` command
 
@@ -242,7 +254,7 @@ Updated libraries to lvgl 7.11.0, ArduinoJson 6.18.0 and TFT_eSPI 2.3.70
 
 ## v0.5.0
 
-Name changed to openHASP - https://openhasp.haswitchplate.com/
+Name changed to openHASP - https://www.openhasp.com/
 > When using HomeAssistant also update the [openHASP Custom Component](https://github.com/HASwitchPlate/openHASP-custom-component/releases/tag/0.5.0)
 
 - Switch built-in icons from FontAwesome to MaterialDesign icons #139
@@ -253,7 +265,7 @@ Name changed to openHASP - https://openhasp.haswitchplate.com/
 - Add `back`, `prev`, `next` attributes to pages #114
 - JSON Serialize text in payloads containing text attributes #140
 - Add az-touch-mod-esp32_ili9341 config and allow for TFT_BACKLIGHT_ON set to LOW #131
-- Add [FreeTouchDeck](https://openhasp.haswitchplate.com/0.5/#devices/freetouchdeck/) and [ESP32-Touchdown](https://openhasp.haswitchplate.com/0.5/#devices/esp32-touchdown/) configs
+- Add [FreeTouchDeck](https://www.openhasp.com/0.5/#devices/freetouchdeck/) and [ESP32-Touchdown](https://www.openhasp.com/0.5/#devices/esp32-touchdown/) configs
 - Add roller `mode` `infinite` attribute
 - Add btnmatrix `toggle` and `one_check` attributes
 - Rework all event handlers to reduce update events and prevent race condition #119 *(events have changed!)*
@@ -281,7 +293,7 @@ Changes:
 - Remove HA auto-discovery in favor of the HA Custom Component
 - Add `clearpage all` command option
 - Add local page navigation and transitions
-- Add [scale properties](https://openhasp.haswitchplate.com/0.5/#styling/#scale)
+- Add [scale properties](https://www.openhasp.com/0.5/#styling/#scale)
 - Add `config/gpio` command
 - Allow for timezone setting in user_config_override.h (thanks @arovak)
 - Start localizations for NL, HU and RO (thanks @nagyrobi)

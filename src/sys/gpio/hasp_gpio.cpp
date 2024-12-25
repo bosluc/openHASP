@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2023 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #include "lv_conf.h" // For timing defines
@@ -123,7 +123,7 @@ static void gpio_event_handler(AceButton* button, uint8_t eventType, uint8_t but
     bool state = false;
     switch(eventType) {
         case AceButton::kEventPressed:
-            if(gpioConfig[btnid].type != hasp_gpio_type_t::BUTTON) {
+            if(gpioConfig[btnid].type != hasp_gpio_type_t::BUTTON_TYPE) {
                 eventid = HASP_EVENT_ON;
             } else {
                 eventid = HASP_EVENT_DOWN;
@@ -146,7 +146,7 @@ static void gpio_event_handler(AceButton* button, uint8_t eventType, uint8_t but
         //     state = true; // do not repeat DOWN + LONG + HOLD
         //     break;
         case AceButton::kEventReleased:
-            if(gpioConfig[btnid].type != hasp_gpio_type_t::BUTTON) {
+            if(gpioConfig[btnid].type != hasp_gpio_type_t::BUTTON_TYPE) {
                 eventid = HASP_EVENT_OFF;
             } else {
                 eventid = HASP_EVENT_RELEASE;
@@ -253,7 +253,7 @@ static void gpio_setup_pin(uint8_t index)
             pinMode(gpio->pin, input_mode);
             gpio->max = 0;
             break;
-        case hasp_gpio_type_t::BUTTON:
+        case hasp_gpio_type_t::BUTTON_TYPE:
             if(gpio->btn) delete gpio->btn;
             gpio->btn   = new AceButton(&buttonConfig, gpio->pin, default_state, index);
             gpio->power = gpio->btn->isPressedRaw();
@@ -521,6 +521,21 @@ static inline bool gpio_set_analog_value(hasp_gpio_config_t* gpio)
 #endif
 }
 
+// val is assumed to be 12 bits
+static inline bool gpio_set_digital_value(hasp_gpio_config_t* gpio)
+{
+    bool state = gpio->power != 0;
+    if(gpio->inverted) state = !state;
+
+#if defined(ARDUINO_ARCH_ESP32)
+    digitalWrite(gpio->pin, state);
+    return true; // sent
+
+#else
+    return false;                  // not implemented
+#endif
+}
+
 static inline bool gpio_set_serial_dimmer(hasp_gpio_config_t* gpio)
 {
     uint16_t val = gpio_limit(gpio->val, 0, 255);
@@ -588,8 +603,7 @@ static bool gpio_set_output_value(hasp_gpio_config_t* gpio, bool power, uint16_t
     switch(gpio->type) {
         case hasp_gpio_type_t::POWER_RELAY:
         case hasp_gpio_type_t::LIGHT_RELAY:
-            digitalWrite(gpio->pin, power ? (gpio->inverted ? !gpio->val : gpio->val) : 0);
-            return true;
+            return gpio_set_digital_value(gpio);
 
         case hasp_gpio_type_t::LED... hasp_gpio_type_t::LED_W:
         case hasp_gpio_type_t::PWM:
@@ -659,7 +673,7 @@ void gpio_output_group_values(uint8_t group)
 
 // SHOULD only by called from DISPATCH
 // Update the normalized value of all group members
-// Does not procude logging output
+// Does not produce logging output
 void gpio_set_normalized_group_values(hasp_update_value_t& value)
 {
     // Set all pins first, minimizes delays
@@ -762,7 +776,7 @@ bool gpioIsSystemPin(uint8_t gpio)
         return true;
     }
 
-#if defined(HASP_USE_CUSTOM)
+#if defined(HASP_USE_CUSTOM) && HASP_USE_CUSTOM > 0
     if(custom_pin_in_use(gpio)) {
         LOG_DEBUG(TAG_GPIO, F(D_BULLET D_GPIO_PIN " %d => Custom"), gpio);
         return true;
@@ -821,7 +835,7 @@ hasp_gpio_config_t gpioGetPinConfig(uint8_t num)
     return gpioConfig[num];
 }
 
-void gpio_discovery(JsonObject& input, JsonArray& relay, JsonArray& light, JsonArray& dimmer)
+void gpio_discovery(JsonObject& input, JsonArray& relay, JsonArray& light, JsonArray& dimmer, JsonArray& event)
 {
     char description[20] = "";
 
@@ -834,6 +848,10 @@ void gpio_discovery(JsonObject& input, JsonArray& relay, JsonArray& light, JsonA
             case hasp_gpio_type_t::POWER_RELAY:
                 relay.add(gpioConfig[i].pin);
                 break;
+                
+            case BUTTON_TYPE ... TOUCH:
+                event.add(gpioConfig[i].pin);
+                break;
 
             case hasp_gpio_type_t::HASP_DAC:
             case hasp_gpio_type_t::LED: // Don't include the moodlight
@@ -843,8 +861,8 @@ void gpio_discovery(JsonObject& input, JsonArray& relay, JsonArray& light, JsonA
                 dimmer.add(gpioConfig[i].pin);
                 break;
 
+            // case BUTTON_TYPE ... TOUCH:
             case SWITCH:
-            case BUTTON ... TOUCH:
                 strcpy_P(description, PSTR("none"));
                 break;
             case BATTERY:
@@ -936,8 +954,8 @@ void gpio_discovery(JsonObject& input, JsonArray& relay, JsonArray& light, JsonA
                 strcpy_P(description, PSTR("unknown"));
         }
 
-        if((gpioConfig[i].type >= hasp_gpio_type_t::SWITCH && gpioConfig[i].type <= hasp_gpio_type_t::WINDOW) ||
-           (gpioConfig[i].type >= hasp_gpio_type_t::BUTTON && gpioConfig[i].type <= hasp_gpio_type_t::TOUCH)) {
+        if((gpioConfig[i].type >= hasp_gpio_type_t::SWITCH && gpioConfig[i].type <= hasp_gpio_type_t::WINDOW)) {
+            // || (gpioConfig[i].type >= hasp_gpio_type_t::BUTTON_TYPE && gpioConfig[i].type <= hasp_gpio_type_t::TOUCH)) {
             JsonArray arr = input[description];
             if(arr.isNull()) arr = input.createNestedArray(description);
             arr.add(gpioConfig[i].pin);
@@ -987,7 +1005,7 @@ bool gpioGetConfig(const JsonObject& settings)
  *
  * Read the settings from json and sets the application variables.
  *
- * @note: data pixel should be formated to uint32_t RGBA. Imagemagick requirements.
+ * @note: data pixel should be formatted to uint32_t RGBA. Imagemagick requirements.
  *
  * @param[in] settings    JsonObject with the config settings.
  **/

@@ -1,19 +1,21 @@
-/* MIT License - Copyright (c) 2019-2023 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 /* Single threaded synchronous paho client */
 
 #include "hasplib.h"
 
-#if HASP_USE_MQTT > 0
+#if HASP_USE_MQTT > 0 && !HASP_USE_MQTT_ASYNC
 #ifdef HASP_USE_PAHO
 
+#if !HASP_USE_CONFIG
 const char FP_CONFIG_HOST[] PROGMEM  = "host";
 const char FP_CONFIG_PORT[] PROGMEM  = "port";
 const char FP_CONFIG_NAME[] PROGMEM  = "name";
 const char FP_CONFIG_USER[] PROGMEM  = "user";
 const char FP_CONFIG_PASS[] PROGMEM  = "pass";
 const char FP_CONFIG_GROUP[] PROGMEM = "group";
+#endif
 
 /*******************************************************************************
  * Copyright (c) 2012, 2020 IBM Corp.
@@ -224,17 +226,18 @@ bool mqttIsConnected()
     return MQTTClient_isConnected(mqtt_client);
 }
 
-int mqtt_send_state(const __FlashStringHelper* subtopic, const char* payload)
+int mqtt_send_state(const __FlashStringHelper* subtopic, const char* payload, bool retain)
 {
     char tmp_topic[mqttNodeTopic.length() + 20];
     snprintf_P(tmp_topic, sizeof(tmp_topic), ("%s" MQTT_TOPIC_STATE "/%s"), mqttNodeTopic.c_str(), subtopic);
-    return mqttPublish(tmp_topic, payload, strlen(payload), false);
+    return mqttPublish(tmp_topic, payload, strlen(payload), retain);
 }
 
 int mqtt_send_discovery(const char* payload, size_t len)
 {
     char tmp_topic[128];
-    snprintf_P(tmp_topic, sizeof(tmp_topic), PSTR(MQTT_PREFIX "/" MQTT_TOPIC_DISCOVERY "/%s"),haspDevice.get_hardware_id());
+    snprintf_P(tmp_topic, sizeof(tmp_topic), PSTR(MQTT_PREFIX "/" MQTT_TOPIC_DISCOVERY "/%s"),
+               haspDevice.get_hardware_id());
     return mqttPublish(tmp_topic, payload, len, false);
 }
 
@@ -266,7 +269,7 @@ static void onConnect(void* context)
     topic = mqttNodeTopic + "config/#";
     mqtt_subscribe(mqtt_client, topic.c_str());
 
-#if defined(HASP_USE_CUSTOM)
+#if defined(HASP_USE_CUSTOM) && HASP_USE_CUSTOM > 0
     topic = mqttGroupTopic + MQTT_TOPIC_CUSTOM "/#";
     mqtt_subscribe(mqtt_client, topic.c_str());
 
@@ -388,6 +391,9 @@ IRAM_ATTR void mqttLoop()
     if(rc == MQTTCLIENT_SUCCESS && message) mqtt_message_arrived(mqtt_client, topicName, topicLen, message);
 };
 
+void mqttEverySecond()
+{}
+
 void mqttEvery5Seconds(bool wifiIsConnected)
 {
     if(!mqttIsConnected()) {
@@ -410,11 +416,37 @@ void mqtt_get_info(JsonDocument& doc)
     info[F(D_INFO_FAILED)]    = mqttFailedCount;
 }
 
+bool mqttGetConfig(const JsonObject& settings)
+{
+    bool changed = false;
+
+    if(strcmp(haspDevice.get_hostname(), settings[FPSTR(FP_CONFIG_NAME)].as<String>().c_str()) != 0) changed = true;
+    settings[FPSTR(FP_CONFIG_NAME)] = haspDevice.get_hostname();
+
+    if(mqttGroupName != settings[FPSTR(FP_CONFIG_GROUP)].as<String>()) changed = true;
+    settings[FPSTR(FP_CONFIG_GROUP)] = mqttGroupName;
+
+    if(mqttServer != settings[FPSTR(FP_CONFIG_HOST)].as<String>()) changed = true;
+    settings[FPSTR(FP_CONFIG_HOST)] = mqttServer;
+
+    if(mqttPort != settings[FPSTR(FP_CONFIG_PORT)].as<uint16_t>()) changed = true;
+    settings[FPSTR(FP_CONFIG_PORT)] = mqttPort;
+
+    if(mqttUsername != settings[FPSTR(FP_CONFIG_USER)].as<String>()) changed = true;
+    settings[FPSTR(FP_CONFIG_USER)] = mqttUsername;
+
+    if(mqttPassword != settings[FPSTR(FP_CONFIG_PASS)].as<String>()) changed = true;
+    settings[FPSTR(FP_CONFIG_PASS)] = mqttPassword;
+
+    if(changed) configOutput(settings, TAG_MQTT);
+    return changed;
+}
+
 /** Set MQTT Configuration.
  *
  * Read the settings from json and sets the application variables.
  *
- * @note: data pixel should be formated to uint32_t RGBA. Imagemagick requirements.
+ * @note: data pixel should be formatted to uint32_t RGBA. Imagemagick requirements.
  *
  * @param[in] settings    JsonObject with the config settings.
  **/
@@ -423,9 +455,11 @@ bool mqttSetConfig(const JsonObject& settings)
     // configOutput(settings, TAG_MQTT);
     bool changed = false;
 
-    // changed |= configSet(mqttPort, settings[FPSTR(FP_CONFIG_PORT)], F("mqttPort"));
-    changed |= mqttPort != settings[FPSTR(FP_CONFIG_PORT)];
-    mqttPort = settings[FPSTR(FP_CONFIG_PORT)];
+    if(!settings[FPSTR(FP_CONFIG_PORT)].isNull()) {
+        // changed |= configSet(mqttPort, settings[FPSTR(FP_CONFIG_PORT)], F("mqttPort"));
+        changed |= mqttPort != settings[FPSTR(FP_CONFIG_PORT)];
+        mqttPort = settings[FPSTR(FP_CONFIG_PORT)];
+    }
 
     if(!settings[FPSTR(FP_CONFIG_NAME)].isNull()) {
         LOG_VERBOSE(TAG_MQTT, "%s => %s", FP_CONFIG_NAME, settings[FPSTR(FP_CONFIG_NAME)].as<const char*>());

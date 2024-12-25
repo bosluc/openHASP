@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2023 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #include "hasplib.h"
@@ -207,21 +207,8 @@ static inline void gui_init_images()
 static inline void gui_init_filesystems()
 {
 #if LV_USE_FS_IF != 0
-    //_lv_fs_init(); // lvgl File System -- not needed, it done in lv_init() when LV_USE_FILESYSTEM is set
     LOG_VERBOSE(TAG_LVGL, F("Filesystem : " D_SETTING_ENABLED));
-    lv_fs_if_init(); // auxilary file system drivers
-    // filesystem_list_path("L:/");
-
-    lv_fs_file_t f;
-    lv_fs_res_t res;
-    res = lv_fs_open(&f, "L:/config.json", LV_FS_MODE_RD);
-    if(res == LV_FS_RES_OK) {
-        LOG_VERBOSE(TAG_HASP, F("TEST Opening config.json OK"));
-        lv_fs_close(&f);
-    } else {
-        LOG_ERROR(TAG_HASP, F("TEST Opening config.json from FS failed %d"), res);
-    }
-
+    lv_fs_if_init(); // auxiliary file system drivers
 #else
     LOG_VERBOSE(TAG_LVGL, F("Filesystem : " D_SETTING_DISABLED));
 #endif
@@ -305,37 +292,59 @@ void guiSetup()
 #endif
     disp_drv.monitor_cb = gui_monitor_cb;
 
+    // register a touchscreen/mouse driver - only on real hardware and SDL2
+    // Win32 and POSIX handles input drivers in tft_driver
+#if TOUCH_DRIVER != -1 || USE_MONITOR
     /* Initialize the touch pad */
     static lv_indev_drv_t indev_drv;
     lv_indev_drv_init(&indev_drv);
     indev_drv.type = LV_INDEV_TYPE_POINTER;
-#if defined(WINDOWS) || defined(POSIX)
+#if USE_MONITOR && HASP_TARGET_PC
     indev_drv.read_cb = mouse_read;
 #else
     indev_drv.read_cb = gui_touch_read;
 #endif
     lv_indev_t* mouse_indev  = lv_indev_drv_register(&indev_drv);
     mouse_indev->driver.type = LV_INDEV_TYPE_POINTER;
+#else
+    // find the first registered input device to add a cursor to
+    lv_indev_t* mouse_indev = NULL;
+    while((mouse_indev = lv_indev_get_next(mouse_indev))) {
+        if(mouse_indev->driver.type == LV_INDEV_TYPE_POINTER) break;
+    }
+#endif
 
     /*Set a cursor for the mouse*/
     LOG_TRACE(TAG_GUI, F("Initialize Cursor"));
     lv_obj_t* mouse_layer = lv_disp_get_layer_sys(NULL); // default display
 
 #if defined(ARDUINO_ARCH_ESP32)
+    Preferences preferences;
+    nvs_user_begin(preferences, "gui", true);
+    // indev_drv.drag_limit           = preferences.getUChar(key, LV_INDEV_DEF_DRAG_LIMIT);
+    // indev_drv.drag_throw           = preferences.getUChar(key, LV_INDEV_DEF_DRAG_THROW);
+    indev_drv.long_press_time     = preferences.getUShort(FP_GUI_LONG_TIME, LV_INDEV_DEF_LONG_PRESS_TIME);
+    indev_drv.long_press_rep_time = preferences.getUShort(FP_GUI_REPEAT_TIME, LV_INDEV_DEF_LONG_PRESS_REP_TIME);
+    // indev_drv.gesture_limit        = preferences.getUChar(key, LV_INDEV_DEF_GESTURE_LIMIT);
+    // indev_drv.gesture_min_velocity = preferences.getUChar(key, LV_INDEV_DEF_GESTURE_MIN_VELOCITY);
+    preferences.end();
+
     LV_IMG_DECLARE(mouse_cursor_icon);          /*Declare the image file.*/
     cursor = lv_img_create(mouse_layer, NULL);  /*Create an image object for the cursor */
     lv_img_set_src(cursor, &mouse_cursor_icon); /*Set the image source*/
 #else
-    cursor            = lv_obj_create(mouse_layer, NULL); // show cursor object on every page
+    cursor = lv_obj_create(mouse_layer, NULL); // show cursor object on every page
     lv_obj_set_size(cursor, 9, 9);
     lv_obj_set_style_local_radius(cursor, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_RADIUS_CIRCLE);
     lv_obj_set_style_local_bg_color(cursor, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_RED);
     lv_obj_set_style_local_bg_opa(cursor, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_OPA_COVER);
 #endif
     gui_hide_pointer(false);
-    lv_indev_set_cursor(mouse_indev, cursor); /*Connect the image  object to the driver*/
+    if(mouse_indev != NULL) {
+        lv_indev_set_cursor(mouse_indev, cursor); /*Connect the image object to the driver*/
+    }
 
-#if !(defined(WINDOWS) || defined(POSIX))
+#if HASP_TARGET_ARDUINO
     // drv_touch_init(gui_settings.rotation); // Touch driver
     haspTouch.init(tft_width, tft_height);
     haspTouch.set_calibration(gui_settings.cal_data);
@@ -376,7 +385,7 @@ IRAM_ATTR void guiLoop(void)
     //  tick.update();
 #endif
 
-#if !(defined(WINDOWS) || defined(POSIX))
+#if HASP_TARGET_ARDUINO
     // haspTouch.loop();
 #endif
 }
@@ -386,23 +395,34 @@ void guiEverySecond(void)
     // nothing
 }
 
+#if HASP_USE_LVGL_TASK == 1
+void gui_task(void* args)
+{
+    LOG_TRACE(TAG_GUI, "Start to run LVGL");
+    while(haspDevice.pc_is_running) {
+        // no idea what MQTT has to do with LVGL - the #if is copied from the code below
+#if defined(ESP32) && defined(HASP_USE_ESP_MQTT)
+        /* Try to take the semaphore, call lvgl related function on success */
+        if(pdTRUE == xSemaphoreTake(xGuiSemaphore, portMAX_DELAY)) {
+            lv_task_handler();
+            xSemaphoreGive(xGuiSemaphore);
+            vTaskDelay(pdMS_TO_TICKS(5));
+        }
+#else
+        // optimize lv_task_handler() by actually using the returned delay value
+        auto time_start     = millis();
+        uint32_t sleep_time = lv_task_handler();
+        delay(sleep_time);
+        auto time_end = millis();
+        lv_tick_inc(time_end - time_start);
+#endif
+    }
+}
+#endif // HASP_USE_LVGL_TASK
+
 #if defined(ESP32) && defined(HASP_USE_ESP_MQTT)
 
 #if HASP_USE_LVGL_TASK == 1
-static void gui_task(void* args)
-{
-    LOG_TRACE(TAG_GUI, "Start to run LVGL");
-    while(1) {
-        vTaskDelay(pdMS_TO_TICKS(10));
-
-        /* Try to take the semaphore, call lvgl related function on success */
-        if(pdTRUE == xSemaphoreTake(xGuiSemaphore, pdMS_TO_TICKS(10))) {
-            lv_task_handler();
-            xSemaphoreGive(xGuiSemaphore);
-        }
-    }
-}
-
 esp_err_t gui_setup_lvgl_task()
 {
 #if CONFIG_FREERTOS_UNICORE == 0
@@ -418,27 +438,23 @@ esp_err_t gui_setup_lvgl_task()
 }
 #endif // HASP_USE_LVGL_TASK
 
-bool gui_acquire(void)
+IRAM_ATTR bool gui_acquire(TickType_t timeout)
 {
 #if ESP32
     TaskHandle_t task = xTaskGetCurrentTaskHandle();
-    if(g_lvgl_task_handle != task) {
-        if(xSemaphoreTake(xGuiSemaphore, pdMS_TO_TICKS(30)) != pdTRUE) {
-            return false;
-        }
-    }
+    if(g_lvgl_task_handle == task) return true;
+    if(xSemaphoreTake(xGuiSemaphore, timeout) != pdTRUE) return false;
 #endif
     return true;
 }
 
-void gui_release(void)
+IRAM_ATTR void gui_release(void)
 {
 #if ESP32
     TaskHandle_t task = xTaskGetCurrentTaskHandle();
-    if(g_lvgl_task_handle != task) {
-        xSemaphoreGive(xGuiSemaphore);
-        // LOG_VERBOSE(TAG_TFT, F("GIVE"));
-    }
+    if(g_lvgl_task_handle == task) return;
+    xSemaphoreGive(xGuiSemaphore);
+    // LOG_VERBOSE(TAG_TFT, F("GIVE"));
 #endif
 }
 
@@ -526,7 +542,7 @@ bool guiGetConfig(const JsonObject& settings)
  *
  * Read the settings from json and sets the application variables.
  *
- * @note: data pixel should be formated to uint32_t RGBA. Imagemagick requirements.
+ * @note: data pixel should be formatted to uint32_t RGBA. Imagemagick requirements.
  *
  * @param[in] settings    JsonObject with the config settings.
  **/
@@ -669,7 +685,7 @@ static void gui_screenshot_to_file(lv_disp_drv_t* disp, const lv_area_t* area, l
  *
  * Flush buffer into a binary file.
  *
- * @note: data pixel should be formated to uint16_t RGB. Set by Bitmap header.
+ * @note: data pixel should be formatted to uint16_t RGB. Set by Bitmap header.
  *
  * @param[in] pFileName   Output binary file name.
  *
@@ -732,7 +748,7 @@ static void gui_screenshot_to_both(lv_disp_drv_t* disp, const lv_area_t* area, l
  *
  * Flush buffer into a http client.
  *
- * @note: data pixel should be formated to uint16_t RGB. Set by Bitmap header.
+ * @note: data pixel should be formatted to uint16_t RGB. Set by Bitmap header.
  *
  **/
 void guiTakeScreenshot()

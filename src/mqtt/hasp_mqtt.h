@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2023 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #ifndef HASP_MQTT_H
@@ -18,12 +18,13 @@ typedef enum {
 
 void mqttSetup();
 IRAM_ATTR void mqttLoop();
+void mqttEverySecond();
 void mqttEvery5Seconds(bool wifiIsConnected);
 void mqttStart();
 void mqttStop();
 
 // int mqtt_send_object_state(uint8_t pageid, uint8_t btnid, const char* payload);
-int mqtt_send_state(const char* subtopic, const char* payload);
+int mqtt_send_state(const char* subtopic, const char* payload, bool retain=false);
 int mqtt_send_discovery(const char* payload, size_t len);
 int mqttPublish(const char* topic, const char* payload, size_t len, bool retain);
 
@@ -73,7 +74,7 @@ bool mqttSetConfig(const JsonObject& settings);
 // These defaults may be overwritten with values saved by the web interface
 
 #ifndef MQTT_GROUPNAME
-#define MQTT_GROUPNAME "plates";
+#define MQTT_GROUPNAME "plates"
 #endif
 
 #ifndef MQTT_HOSTNAME

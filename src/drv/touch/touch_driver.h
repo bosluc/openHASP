@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2022 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #ifndef HASP_BASE_TOUCH_DRIVER_H
@@ -63,6 +63,9 @@ class BaseTouch {
 #elif TOUCH_DRIVER == 0x6336 && defined(LGFX_USE_V1) && defined(HASP_USE_LGFX_TOUCH)
 #warning Building for LovyanGFX FT6336
 #include "touch_driver_lovyangfx.h"
+#elif defined(LGFX_USE_V1) && defined(HASP_USE_LGFX_TOUCH)
+#warning Building for LovyanGFX
+#include "touch_driver_lovyangfx.h"
 #elif TOUCH_DRIVER == 0x5206
 #warning Building for FT5206
 #include "touch_driver_ft5206.h"
@@ -81,9 +84,15 @@ class BaseTouch {
 #elif TOUCH_DRIVER == 0x1680
 #warning Building for GSL1680
 #include "touch_driver_gslx680.h"
+#elif TOUCH_DRIVER == 0x2007
+#warning Building for TSC2007
+#include "touch_driver_tsc2007.h"
 #elif defined(LGFX_USE_V1)
 #warning Building for LovyanGfx Touch
 #include "touch_driver_lovyangfx.h"
+#elif TOUCH_DRIVER == 0x3240
+#warning Building for CST3240
+#include "touch_driver_cst3240.h"
 #else
 #warning Building for Generic Touch
 using dev::BaseTouch;

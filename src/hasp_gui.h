@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2022 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #ifndef HASP_GUI_H
@@ -60,10 +60,15 @@ uint32_t guiScreenshotEtag();
 void gui_flush_cb(lv_disp_drv_t* disp, const lv_area_t* area, lv_color_t* color_p);
 void gui_antiburn_cb(lv_disp_drv_t* disp, const lv_area_t* area, lv_color_t* color_p);
 
+/* ===== Main LVGL Task ===== */
+#if HASP_USE_LVGL_TASK == 1
+void gui_task(void* args);
+#endif
+
 /* ===== Locks ===== */
-bool gui_acquire(void);
-void gui_release(void);
 #ifdef ESP32
+IRAM_ATTR bool gui_acquire(TickType_t timeout);
+IRAM_ATTR void gui_release(void);
 esp_err_t gui_setup_lvgl_task(void);
 #endif
 

@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2023 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #include <time.h>
@@ -16,7 +16,7 @@
 #include "../hasp_debug.h"
 #include "hasp_gui.h" // for screenshot
 
-#if defined(WINDOWS) || defined(POSIX)
+#if HASP_TARGET_PC
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -43,7 +43,7 @@ uint16_t dispatchSecondsToNextTeleperiod = 0;
 uint16_t dispatchSecondsToNextSensordata = 0;
 uint16_t dispatchSecondsToNextDiscovery  = 0;
 uint8_t nCommands                        = 0;
-haspCommand_t commands[28];
+haspCommand_t commands[29];
 
 moodlight_t moodlight    = {.brightness = 255};
 uint8_t saved_jsonl_page = 0;
@@ -52,7 +52,7 @@ uint8_t saved_jsonl_page = 0;
  */
 void dispatch_state_subtopic(const char* subtopic, const char* payload)
 {
-#if HASP_USE_MQTT == 0 && HASP_USE_TASMOTA_CLIENT == 0
+#if HASP_USE_MQTT == 0 && defined(HASP_USE_TASMOTA_CLIENT) && HASP_USE_TASMOTA_CLIENT > 0
     LOG_TRACE(TAG_MSGR, F("%s => %s"), subtopic, payload);
 #else
 
@@ -74,10 +74,14 @@ void dispatch_state_subtopic(const char* subtopic, const char* payload)
     }
 #endif
 
-#if HASP_USE_TASMOTA_CLIENT > 0
+#if defined(HASP_USE_TASMOTA_CLIENT) && HASP_USE_TASMOTA_CLIENT > 0
     slave_send_state(subtopic, payload);
 #endif
 
+#endif
+
+#if defined(HASP_USE_CUSTOM) && HASP_USE_CUSTOM > 0
+    custom_state_subtopic(subtopic, payload);
 #endif
 }
 
@@ -177,7 +181,7 @@ static inline bool dispatch_parse_button_attribute(const char* topic_p, const ch
     objid   = (uint8_t)num;
     topic_p = pEnd;
 
-    if(*topic_p != '.') return false; // obligated seperator
+    if(*topic_p != '.') return false; // obligated separator
     topic_p++;
 
     hasp_process_attribute(pageid, objid, topic_p, payload, update);
@@ -268,6 +272,42 @@ static void dispatch_output(const char* topic, const char* payload)
 
 #endif
 }
+
+// static inline size_t dispatch_msg_length(size_t len)
+// {
+//     return (len / 64) * 64 + 64;
+// }
+
+// void dispatch_enqueue_message(const char* topic, const char* payload, size_t payload_len, uint8_t source)
+// {
+//     // Add new message to the queue
+//     dispatch_message_t data;
+
+//     size_t topic_len = strlen(topic);
+//     data.topic       = (char*)hasp_calloc(sizeof(char), dispatch_msg_length(topic_len + 1));
+//     data.payload     = (char*)hasp_calloc(sizeof(char), dispatch_msg_length(payload_len + 1));
+//     data.source      = source;
+
+//     if(!data.topic || !data.payload) {
+//         LOG_ERROR(TAG_MQTT_RCV, D_ERROR_OUT_OF_MEMORY);
+//         hasp_free(data.topic);
+//         hasp_free(data.payload);
+//         return;
+//     }
+//     memcpy(data.topic, topic, topic_len);
+//     memcpy(data.payload, payload, payload_len);
+
+//     {
+//         size_t attempt = 0;
+//         while(xQueueSend(message_queue, &data, (TickType_t)0) == errQUEUE_FULL && attempt < 100) {
+//             delay(5);
+//             attempt++;
+//         };
+//         if(attempt >= 100) {
+//             LOG_ERROR(TAG_MSGR, D_ERROR_OUT_OF_MEMORY);
+//         }
+//     }
+// }
 
 // objectattribute=value
 static void dispatch_command(const char* topic, const char* payload, bool update, uint8_t source)
@@ -412,7 +452,7 @@ void dispatch_topic_payload(const char* topic, const char* payload, bool update,
     }
 #endif
 
-#if defined(HASP_USE_CUSTOM)
+#if defined(HASP_USE_CUSTOM) && HASP_USE_CUSTOM > 0
     if(topic == strstr_P(topic, PSTR(MQTT_TOPIC_CUSTOM "/"))) { // startsWith custom
         topic += 7u;
         custom_topic_payload(topic, (char*)payload, source);
@@ -460,10 +500,12 @@ void dispatch_config(const char* topic, const char* payload, uint8_t source)
     }
 
     if(strcasecmp_P(topic, PSTR("debug")) == 0) {
+#if HASP_TARGET_ARDUINO
         if(update)
             debugSetConfig(settings);
         else
             debugGetConfig(settings);
+#endif
     }
 
     else if(strcasecmp_P(topic, PSTR("gui")) == 0) {
@@ -503,6 +545,14 @@ void dispatch_config(const char* topic, const char* payload, uint8_t source)
         else
             timeGetConfig(settings);
     }
+#if HASP_USE_WIREGUARD > 0
+    else if(strcasecmp_P(topic, PSTR(FP_WG)) == 0) {
+        if(update)
+            wgSetConfig(settings);
+        else
+            wgGetConfig(settings);
+    }
+#endif
 #if HASP_USE_MQTT > 0
     else if(strcasecmp_P(topic, PSTR(FP_MQTT)) == 0) {
         if(update)
@@ -726,7 +776,7 @@ void dispatch_parse_jsonl(std::istream& stream, uint8_t& saved_page_id)
 void dispatch_parse_jsonl(const char*, const char* payload, uint8_t source)
 {
     if(source != TAG_MQTT) saved_jsonl_page = haspPages.get();
-#if HASP_USE_CONFIG > 0
+#if HASP_USE_CONFIG > 0 && HASP_TARGET_ARDUINO
     CharStream stream((char*)payload);
     // stream.setTimeout(10);
     dispatch_parse_jsonl(stream, saved_jsonl_page);
@@ -757,6 +807,11 @@ void dispatch_run_script(const char*, const char* payload, uint8_t source)
         return;
     }
 
+    // if(!gui_acquire(pdMS_TO_TICKS(500))) {
+    //     LOG_ERROR(TAG_MSGR, F(D_FILE_LOAD_FAILED), payload);
+    //     return;
+    // }
+
     // char buffer[512]; // use stack
     String buffer((char*)0); // use heap
     buffer.reserve(512);
@@ -780,6 +835,7 @@ void dispatch_run_script(const char*, const char* payload, uint8_t source)
         }
     }
 
+    // gui_release();
     cmdfile.close();
     LOG_INFO(TAG_MSGR, F(D_FILE_LOADED), payload);
 #else
@@ -790,7 +846,11 @@ void dispatch_run_script(const char*, const char* payload, uint8_t source)
     path[0] = '.';
     path[1] = '\0';
     strcat(path, filename);
+#if defined(WINDOWS)
     path[1] = '\\';
+#elif defined(POSIX)
+    path[1] = '/';
+#endif
 
     LOG_TRACE(TAG_HASP, F("Loading %s from disk..."), path);
     std::ifstream f(path); // taking file as inputstream
@@ -807,6 +867,88 @@ void dispatch_run_script(const char*, const char* payload, uint8_t source)
     LOG_INFO(TAG_HASP, F("Loaded %s from disk"), path);
 #endif
 }
+
+/*
+void dispatch_fs(const char*, const char* payload, uint8_t source)
+{
+    StaticJsonDocument<512> json;
+
+    // Note: Deserialization needs to be (const char *) so the objects WILL be copied
+    // this uses more memory but otherwise the mqtt receive buffer can get overwritten by the send buffer !!
+    DeserializationError jsonError = deserializeJson(json, payload);
+    // json.shrinkToFit();
+
+    if(!jsonError && json.is<JsonObject>()) { // Only JsonObject is valid
+        JsonVariant action;
+
+        const char* cmd = json["cmd"].as<const char*>();
+        const char* src = json["src"].as<const char*>();
+        const char* dst = json["dst"].as<const char*>();
+        int res = 0;
+
+        if(String(cmd) == "stat") {
+            res = filesystem_vfs_file_exists(src);
+        }
+        if(String(cmd) == "rm") {
+            res = filesystem_vfs_delete_file(src);
+        }
+        if(String(cmd) == "cp") {
+            res = filesystem_vfs_copy_file(src, dst);
+        }
+        if(String(cmd) == "ls") {
+            filesystem_list_path(src);
+        }
+
+        if(res) {
+            LOG_WARNING(TAG_MSGR, "Succes");
+        } else {
+            LOG_WARNING(TAG_MSGR, "Failed");
+        }
+    }
+}
+*/
+
+#if HASP_TARGET_PC
+static void shell_command_thread(char* cmdline)
+{
+    // run the command
+    FILE* pipe = popen(cmdline, "r");
+    // free the string duplicated previously
+    free(cmdline);
+    if(!pipe) {
+        LOG_ERROR(TAG_MSGR, F("Couldn't execute system command"));
+        return;
+    }
+    // read each line, up to 1023 chars long
+    char command[1024];
+    while(fgets(command, sizeof(command), pipe) != NULL) {
+        // strip newline character
+        char* temp = command;
+        while(*temp) {
+            if(*temp == '\r' || *temp == '\n') {
+                *temp = '\0';
+                break;
+            }
+            temp++;
+        }
+        // run the command
+        LOG_INFO(TAG_MSGR, F("Running '%s'"), command);
+        dispatch_text_line(command, TAG_MSGR);
+    }
+    // close the pipe, check return code
+    int status_code = pclose(pipe);
+    if(status_code) {
+        LOG_ERROR(TAG_MSGR, F("Process exited with non-zero return code %d"), status_code);
+    }
+}
+
+void dispatch_shell_execute(const char*, const char* payload, uint8_t source)
+{
+    // must duplicate the string for thread's own usage
+    char* command = strdup(payload);
+    haspDevice.run_thread((void (*)(void*))shell_command_thread, (void*)command);
+}
+#endif
 
 void dispatch_current_page()
 {
@@ -891,7 +1033,14 @@ void dispatch_page(const char*, const char* payload, uint8_t source)
 void dispatch_clear_page(const char*, const char* page, uint8_t source)
 {
     if(!strcasecmp(page, "all")) {
+#if !HASP_TARGET_PC
         hasp_init();
+#else
+        // workaround for "clearpage all" deadlocking or crashing on PC build (when called from non-LVGL thread)
+        for(uint8_t pageid = 0; pageid <= HASP_NUM_PAGES; pageid++) {
+            haspPages.clear(pageid);
+        }
+#endif
         return;
     }
 
@@ -973,12 +1122,12 @@ void dispatch_moodlight(const char* topic, const char* payload, uint8_t source)
     dispatch_state_subtopic(out_topic, buffer);
 }
 
-void dispatch_backlight_obsolete(const char* topic, const char* payload, uint8_t source)
-{
-    LOG_WARNING(TAG_MSGR, F(D_ATTRIBUTE_OBSOLETE D_ATTRIBUTE_INSTEAD), topic,
-                "backlight"); // TODO: obsolete dim, light and brightness
-    dispatch_backlight(topic, payload, source);
-}
+// void dispatch_backlight_obsolete(const char* topic, const char* payload, uint8_t source)
+// {
+//     LOG_WARNING(TAG_MSGR, F(D_ATTRIBUTE_OBSOLETE D_ATTRIBUTE_INSTEAD), topic,
+//                 "backlight"); // TODO: obsolete dim, light and brightness
+//     dispatch_backlight(topic, payload, source);
+// }
 
 void dispatch_backlight(const char*, const char* payload, uint8_t source)
 {
@@ -1105,7 +1254,7 @@ void dispatch_reboot(bool saveConfig)
     LOG_VERBOSE(TAG_MSGR, F("-------------------------------------"));
     LOG_TRACE(TAG_MSGR, F(D_DISPATCH_REBOOT));
 
-#if defined(WINDOWS) || defined(POSIX)
+#if HASP_TARGET_PC
     fflush(stdout);
 #else
     Serial.flush();
@@ -1146,7 +1295,7 @@ void dispatch_send_sensordata(const char*, const char*, uint8_t source)
 
     haspDevice.get_sensors(doc);
 
-#if defined(HASP_USE_CUSTOM)
+#if defined(HASP_USE_CUSTOM) && HASP_USE_CUSTOM > 0
     custom_get_sensors(doc);
 #endif
 
@@ -1190,26 +1339,22 @@ void dispatch_queue_discovery(const char*, const char*, uint8_t source)
     dispatchSecondsToNextDiscovery = seconds;
 }
 
-// Periodically publish a JSON string facilitating plate discovery
-void dispatch_send_discovery(const char*, const char*, uint8_t source)
+void dispatch_get_discovery_data(JsonDocument& doc)
 {
-#if HASP_USE_MQTT > 0
-
-    StaticJsonDocument<1024> doc;
-    char data[1024];
     char buffer[64];
 
-    doc[F("node")]  = haspDevice.get_hostname();
-    doc[F("mdl")]   = haspDevice.get_model();
-    doc[F("mf")]    = F(D_MANUFACTURER);
-    doc[F("hwid")]  = haspDevice.get_hardware_id();
-    doc[F("pages")] = haspPages.count();
-    doc[F("sw")]    = haspDevice.get_version();
+    doc[F("node")]   = haspDevice.get_hostname();
+    doc[F("mdl")]    = haspDevice.get_model();
+    doc[F("mf")]     = F(D_MANUFACTURER);
+    doc[F("hwid")]   = haspDevice.get_hardware_id();
+    doc[F("pages")]  = haspPages.count();
+    doc[F("sw")]     = haspDevice.get_version();
+    doc[F("node_t")] = String("hasp/") + haspDevice.get_hostname() + "/";
 
 #if HASP_USE_HTTP > 0
     network_get_ipaddress(buffer, sizeof(buffer));
     doc[F("uri")] = String(F("http://")) + String(buffer);
-#elif defined(WINDOWS) || defined(POSIX)
+#elif HASP_TARGET_PC
     doc[F("uri")] = "http://google.pt";
 #endif
 
@@ -1217,11 +1362,22 @@ void dispatch_send_discovery(const char*, const char*, uint8_t source)
     JsonArray relay  = doc.createNestedArray(F("power"));
     JsonArray led    = doc.createNestedArray(F("light"));
     JsonArray dimmer = doc.createNestedArray(F("dim"));
+    JsonArray event  = doc.createNestedArray(F("event"));
 
 #if HASP_USE_GPIO > 0
-    gpio_discovery(input, relay, led, dimmer);
+    gpio_discovery(input, relay, led, dimmer, event);
 #endif
+}
 
+// Periodically publish a JSON string facilitating plate discovery
+void dispatch_send_discovery(const char*, const char*, uint8_t source)
+{
+#if HASP_USE_MQTT > 0
+    StaticJsonDocument<1024> doc;
+    char data[1024];
+    char buffer[64];
+
+    dispatch_get_discovery_data(doc);
     size_t len = serializeJson(doc, data);
 
     switch(mqtt_send_discovery(data, len)) {
@@ -1312,44 +1468,29 @@ void dispatch_current_state(uint8_t source)
 // Format filesystem and erase EEPROM
 bool dispatch_factory_reset()
 {
-    bool formated = true;
-    bool erased   = true;
-    bool cleared  = true;
+    bool formatted = true;
+    bool erased    = true;
+    bool cleared   = true;
 
 #if ESP32
     erased = nvs_clear_user_config();
 #endif
 
 #if HASP_USE_SPIFFS > 0 || HASP_USE_LITTLEFS > 0
-    formated = HASP_FS.format();
-    if(formated) filesystemSetupFiles();
+    formatted = HASP_FS.format();
+    if(formatted) filesystemSetupFiles();
 #endif
 
 #if HASP_USE_EEPROM > 0
     erased = configClearEeprom();
 #endif
 
-    return formated && erased && cleared;
+    return formatted && erased && cleared;
 }
 
 void dispatch_calibrate(const char*, const char*, uint8_t source)
 {
     guiCalibrate();
-}
-
-void dispatch_wakeup()
-{
-    if(hasp_get_sleep_state() == HASP_SLEEP_OFF) return;
-    hasp_set_sleep_state(HASP_SLEEP_OFF);
-    dispatch_idle_state(HASP_SLEEP_OFF);
-}
-
-void dispatch_wakeup_obsolete(const char* topic, const char*, uint8_t source)
-{
-    LOG_WARNING(TAG_MSGR, F(D_ATTRIBUTE_OBSOLETE D_ATTRIBUTE_INSTEAD), topic,
-                "idle=off"); // TODO: obsolete dim, light and brightness
-    dispatch_wakeup();
-    hasp_set_wakeup_touch(false);
 }
 
 void dispatch_sleep(const char*, const char*, uint8_t source)
@@ -1361,7 +1502,7 @@ void dispatch_idle_state(uint8_t state)
 {
     char topic[8];
     char buffer[8];
-    memcpy_P(topic, PSTR("idle"), 8);
+    memcpy_P(topic, PSTR("idle"), 5);
     hasp_get_sleep_payload(state, buffer);
     dispatch_state_subtopic(topic, buffer);
 }
@@ -1372,10 +1513,13 @@ void dispatch_idle(const char*, const char* payload, uint8_t source)
         uint8_t state = HASP_SLEEP_LAST;
         if(!strcmp_P(payload, "off")) {
             hasp_set_sleep_state(HASP_SLEEP_OFF);
+            dispatch_run_script(NULL, "L:/idle_off.cmd", source);
         } else if(!strcmp_P(payload, "short")) {
             hasp_set_sleep_state(HASP_SLEEP_SHORT);
+            dispatch_run_script(NULL, "L:/idle_short.cmd", source);
         } else if(!strcmp_P(payload, "long")) {
             hasp_set_sleep_state(HASP_SLEEP_LONG);
+            dispatch_run_script(NULL, "L:/idle_long.cmd", source);
         } else {
             LOG_WARNING(TAG_MSGR, F("Invalid idle value %s"), payload);
             return;
@@ -1383,6 +1527,20 @@ void dispatch_idle(const char*, const char* payload, uint8_t source)
     }
 
     dispatch_idle_state(hasp_get_sleep_state()); // always send the current state
+}
+
+void dispatch_wakeup(uint8_t source)
+{
+    //  if(hasp_get_sleep_state() == HASP_SLEEP_OFF) return;
+    dispatch_idle(NULL, "off", source);
+}
+
+void dispatch_wakeup_obsolete(const char* topic, const char*, uint8_t source)
+{
+    LOG_WARNING(TAG_MSGR, F(D_ATTRIBUTE_OBSOLETE D_ATTRIBUTE_INSTEAD), topic,
+                "idle=off"); // TODO: obsolete wakeup
+    dispatch_wakeup(source);
+    hasp_set_wakeup_touch(false);
 }
 
 void dispatch_reboot(const char*, const char*, uint8_t source)
@@ -1479,6 +1637,10 @@ void dispatchSetup()
     dispatch_add_command(PSTR("sensors"), dispatch_send_sensordata);
     dispatch_add_command(PSTR("theme"), dispatch_theme);
     dispatch_add_command(PSTR("run"), dispatch_run_script);
+    // dispatch_add_command(PSTR("fs"), dispatch_fs);
+#if HASP_TARGET_PC
+    dispatch_add_command(PSTR("shell"), dispatch_shell_execute);
+#endif
     dispatch_add_command(PSTR("service"), dispatch_service);
     dispatch_add_command(PSTR("antiburn"), dispatch_antiburn);
     dispatch_add_command(PSTR("calibrate"), dispatch_calibrate);
@@ -1490,17 +1652,17 @@ void dispatchSetup()
     dispatch_add_command(PSTR("factoryreset"), dispatch_factory_reset);
 
     /* obsolete commands */
-    dispatch_add_command(PSTR("dim"), dispatch_backlight_obsolete);
-    dispatch_add_command(PSTR("brightness"), dispatch_backlight_obsolete);
-    dispatch_add_command(PSTR("wakeup"), dispatch_wakeup_obsolete);
-    dispatch_add_command(PSTR("light"), dispatch_backlight_obsolete);
+    // dispatch_add_command(PSTR("dim"), dispatch_backlight_obsolete);
+    // dispatch_add_command(PSTR("brightness"), dispatch_backlight_obsolete);
+    // dispatch_add_command(PSTR("light"), dispatch_backlight_obsolete);
+    dispatch_add_command(PSTR("wakeup"), dispatch_wakeup_obsolete); // used in CC
 
 #if HASP_USE_SPIFFS > 0 || HASP_USE_LITTLEFS > 0
 #if defined(ARDUINO_ARCH_ESP32)
     dispatch_add_command(PSTR("unzip"), filesystemUnzip);
 #endif
 #endif
-#if HASP_USE_CONFIG > 0
+#if HASP_USE_CONFIG > 0 && HASP_TARGET_ARDUINO
     dispatch_add_command(PSTR("setupap"), oobeFakeSetup);
 #endif
     /* WARNING: remember to expand the commands array when adding new commands */
@@ -1509,7 +1671,20 @@ void dispatchSetup()
 }
 
 IRAM_ATTR void dispatchLoop()
-{}
+{
+    // UBaseType_t msg_count = uxQueueMessagesWaiting(message_queue));
+    // if(msg_count == 0) return;
+
+    // dispatch_message_t data;
+    // while(xQueueReceive(message_queue, &data, (TickType_t)0)) {
+    //     LOG_WARNING(TAG_MSGR, F("[%d] QUE %s => %s"), msg_count, data.topic, data.payload);
+    //     size_t length = strlen(data.payload);
+    //     dispatch_topic_payload(data.topic, data.payload, length > 0, data.source);
+    //     hasp_free(data.topic);
+    //     hasp_free(data.payload);
+    //     // delay(1);
+    // }
+}
 
 #if 1 || ARDUINO
 void dispatchEverySecond()
@@ -1541,7 +1716,7 @@ void everySecond()
 {
     if(dispatch_setings.teleperiod > 0) {
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::chrono::seconds elapsed = std::chrono::duration_cast<std::chrono::seconds>(end - begin);
+        std::chrono::seconds elapsed              = std::chrono::duration_cast<std::chrono::seconds>(end - begin);
 
         if(elapsed.count() >= dispatch_setings.teleperiod) {
             std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();

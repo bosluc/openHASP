@@ -1,4 +1,4 @@
-/* MIT License - Copyright (c) 2019-2023 Francis Van Roie
+/* MIT License - Copyright (c) 2019-2024 Francis Van Roie
    For full license information read the LICENSE file in the project folder */
 
 #include <Arduino.h>
@@ -387,10 +387,7 @@ static void wifiSTADisconnected(WiFiEventStationModeDisconnected info)
 
 bool wifiShowAP()
 {
-    if(wifiEnabled && strlen(wifiSsid) != 0)
-        return false;
-    else
-        return true;
+    return wifiEnabled && strlen(wifiSsid) == 0;
 }
 
 bool wifiShowAP(char* ssid, char* pass)
@@ -510,6 +507,7 @@ void wifiSetup()
         preferences.end();
 #endif
 
+        WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
         wifiReconnect();
         WiFi.setAutoReconnect(false); // done in wifiEvery5Seconds
         LOG_TRACE(TAG_WIFI, F(D_WIFI_CONNECTING_TO), wifiSsid);
@@ -679,7 +677,7 @@ bool wifiGetConfig(const JsonObject& settings)
  *
  * Read the settings from json and sets the application variables.
  *
- * @note: data pixel should be formated to uint32_t RGBA. Imagemagick requirements.
+ * @note: data pixel should be formatted to uint32_t RGBA. Imagemagick requirements.
  *
  * @param[in] settings    JsonObject with the config settings.
  **/
